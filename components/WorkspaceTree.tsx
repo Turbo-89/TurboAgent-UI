@@ -37,6 +37,9 @@ type ListResponse = {
 
 type WorkspaceTreeProps = {
   onOpenFile: (rootAlias: string, path: string) => void;
+  onAddContextFile?: (rootAlias: string, path: string) => void;
+  selectedContextFiles?: { root: string; path: string }[];
+  contextLimitReached?: boolean;
 };
 
 function parentPath(path: string): string {
@@ -91,7 +94,16 @@ function formatFetchError({
     .join("\n");
 }
 
-export default function WorkspaceTree({ onOpenFile }: WorkspaceTreeProps) {
+function fileKey(root: string, path: string): string {
+  return `${root}:${path}`;
+}
+
+export default function WorkspaceTree({
+  onOpenFile,
+  onAddContextFile,
+  selectedContextFiles = [],
+  contextLimitReached = false,
+}: WorkspaceTreeProps) {
   const [roots, setRoots] = useState<FsRoot[]>([]);
   const [selectedRoot, setSelectedRoot] = useState("");
   const [currentPath, setCurrentPath] = useState("");
@@ -206,6 +218,13 @@ export default function WorkspaceTree({ onOpenFile }: WorkspaceTreeProps) {
       }),
     [entries],
   );
+  const selectedContextKeys = useMemo(
+    () =>
+      new Set(
+        selectedContextFiles.map((file) => fileKey(file.root, file.path)),
+      ),
+    [selectedContextFiles],
+  );
 
   return (
     <section className="flex h-full min-h-0 flex-col border border-neutral-800 bg-neutral-950 text-sm text-neutral-100">
@@ -261,31 +280,49 @@ export default function WorkspaceTree({ onOpenFile }: WorkspaceTreeProps) {
           <div className="p-3 text-neutral-500">No files</div>
         ) : (
           <ul className="divide-y divide-neutral-900">
-            {sortedEntries.map((entry) => (
-              <li key={entry.path || entry.name}>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-neutral-900"
-                  onClick={() => {
-                    if (entry.dir) {
-                      setCurrentPath(entry.path);
-                    } else {
-                      onOpenFile(selectedRoot, entry.path);
-                    }
-                  }}
-                >
-                  <span className="w-5 shrink-0 text-neutral-500">
-                    {entry.dir ? "dir" : "file"}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-                  {!entry.dir && typeof entry.size === "number" ? (
-                    <span className="shrink-0 text-xs text-neutral-500">
-                      {entry.size.toLocaleString()} B
-                    </span>
-                  ) : null}
-                </button>
-              </li>
-            ))}
+            {sortedEntries.map((entry) => {
+              const selected = selectedContextKeys.has(
+                fileKey(selectedRoot, entry.path),
+              );
+
+              return (
+                <li key={entry.path || entry.name}>
+                  <div className="flex items-center gap-2 px-3 py-2 hover:bg-neutral-900">
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      onClick={() => {
+                        if (entry.dir) {
+                          setCurrentPath(entry.path);
+                        } else {
+                          onOpenFile(selectedRoot, entry.path);
+                        }
+                      }}
+                    >
+                      <span className="w-5 shrink-0 text-neutral-500">
+                        {entry.dir ? "dir" : "file"}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                      {!entry.dir && typeof entry.size === "number" ? (
+                        <span className="shrink-0 text-xs text-neutral-500">
+                          {entry.size.toLocaleString()} B
+                        </span>
+                      ) : null}
+                    </button>
+                    {!entry.dir && onAddContextFile ? (
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={selected || contextLimitReached}
+                        onClick={() => onAddContextFile(selectedRoot, entry.path)}
+                      >
+                        {selected ? "Selected" : "Add context"}
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

@@ -22,6 +22,12 @@ type OpenedFile = {
   content: string;
 };
 
+type ContextFile = {
+  root: string;
+  path: string;
+  sha256?: string;
+};
+
 type ReadResponse = {
   ok: boolean;
   root: string;
@@ -32,6 +38,10 @@ type ReadResponse = {
 
 function createSessionId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function contextFileKey(file: { root: string; path: string }) {
+  return `${file.root}:${file.path}`;
 }
 
 export default function ChatPage() {
@@ -46,6 +56,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [openedFile, setOpenedFile] = useState<OpenedFile | null>(null);
+  const [selectedContextFiles, setSelectedContextFiles] = useState<ContextFile[]>([]);
+  const [contextMessage, setContextMessage] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -95,23 +107,37 @@ export default function ChatPage() {
     setInput("");
     setIsStreaming(true);
 
+    const context =
+      openedFile || selectedContextFiles.length > 0
+        ? {
+            ...(openedFile
+              ? {
+                  open_file: {
+                    root: openedFile.root,
+                    path: openedFile.path,
+                    ...(openedFile.sha256 ? { sha256: openedFile.sha256 } : {}),
+                  },
+                }
+              : {}),
+            ...(selectedContextFiles.length > 0
+              ? {
+                  selected_files: selectedContextFiles.map((file) => ({
+                    root: file.root,
+                    path: file.path,
+                    ...(file.sha256 ? { sha256: file.sha256 } : {}),
+                  })),
+                }
+              : {}),
+          }
+        : undefined;
+
     try {
       const res = await fetch("/api/chat-stream", {
         method: "POST",
         body: JSON.stringify({
           message: text,
           session_id: sessionId || "default",
-          ...(openedFile
-            ? {
-                context: {
-                  open_file: {
-                    root: openedFile.root,
-                    path: openedFile.path,
-                    ...(openedFile.sha256 ? { sha256: openedFile.sha256 } : {}),
-                  },
-                },
-              }
-            : {}),
+          ...(context ? { context } : {}),
         }),
       });
 
@@ -222,13 +248,111 @@ export default function ChatPage() {
     }
   }
 
+  async function addContextFile(rootAlias: string, path: string) {
+    const nextFile = { root: rootAlias, path };
+    const key = contextFileKey(nextFile);
+
+    setContextMessage("");
+
+    if (selectedContextFiles.some((file) => contextFileKey(file) === key)) {
+      return;
+    }
+
+    if (selectedContextFiles.length >= 10) {
+      setContextMessage("Maximaal 10 contextbestanden geselecteerd.");
+      return;
+    }
+
+    const params = new URLSearchParams({
+      root: rootAlias,
+      path,
+    });
+
+    try {
+      const res = await fetch(backendUrl(`/api/fs/read?${params}`), {
+        cache: "no-store",
+      });
+      const data = (await res.json().catch(() => null)) as ReadResponse | null;
+
+      setSelectedContextFiles((prev) => {
+        if (prev.some((file) => contextFileKey(file) === key) || prev.length >= 10) {
+          return prev;
+        }
+
+        return [
+          ...prev,
+          {
+            root: data?.root || rootAlias,
+            path: data?.path || path,
+            sha256: data?.sha256,
+          },
+        ];
+      });
+    } catch {
+      setSelectedContextFiles((prev) => {
+        if (prev.some((file) => contextFileKey(file) === key) || prev.length >= 10) {
+          return prev;
+        }
+
+        return [...prev, nextFile];
+      });
+    }
+  }
+
+  function removeContextFile(root: string, path: string) {
+    const key = contextFileKey({ root, path });
+    setSelectedContextFiles((prev) =>
+      prev.filter((file) => contextFileKey(file) !== key),
+    );
+    setContextMessage("");
+  }
+
   return (
     <div className="grid h-full w-full grid-cols-[320px_minmax(0,1fr)] gap-4">
       <aside className="min-h-0">
-        <WorkspaceTree onOpenFile={openWorkspaceFile} />
+        <WorkspaceTree
+          onOpenFile={openWorkspaceFile}
+          onAddContextFile={addContextFile}
+          selectedContextFiles={selectedContextFiles}
+          contextLimitReached={selectedContextFiles.length >= 10}
+        />
       </aside>
 
       <div className="flex min-h-0 flex-col">
+        {selectedContextFiles.length > 0 || contextMessage ? (
+          <section className="mb-3 border border-neutral-800 bg-neutral-950 p-2 text-xs text-neutral-300">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="font-semibold text-neutral-200">
+                Contextbestanden ({selectedContextFiles.length}/10)
+              </span>
+              {contextMessage ? (
+                <span className="text-yellow-300">{contextMessage}</span>
+              ) : null}
+            </div>
+            {selectedContextFiles.length > 0 ? (
+              <ul className="space-y-1">
+                {selectedContextFiles.map((file) => (
+                  <li
+                    key={contextFileKey(file)}
+                    className="flex items-center gap-2"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-mono">
+                      {file.root}/{file.path}
+                    </span>
+                    <button
+                      type="button"
+                      className="rounded border border-neutral-700 px-2 py-1 text-neutral-300"
+                      onClick={() => removeContextFile(file.root, file.path)}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
+
         {openedFile ? (
           <section className="mb-3 max-h-56 overflow-hidden border border-neutral-800 bg-neutral-950">
             <div className="border-b border-neutral-800 p-2 text-xs text-neutral-400">
