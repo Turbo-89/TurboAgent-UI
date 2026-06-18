@@ -1,45 +1,60 @@
 "use client";
-import { useState } from "react";
-import axios from "axios";
+
+import ChatLayout from "@/components/ChatLayout";
 import ChatMessage from "@/components/ChatMessage";
+import { useEffect, useState } from "react";
 
-export default function ChatPage() {
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
+type Role = "user" | "assistant";
+type Msg = { role: Role; text: string };
 
-  async function sendMessage() {
-    if (!input.trim()) return;
+function createSessionId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
-    const user = { role: "user", content: input };
-    const res = await axios.post("/api/agent/chat", { message: input });
+export default function AgentChatPage() {
+  const [sessionId, setSessionId] = useState<string>("");
+  const [messages, setMessages] = useState<Msg[]>([]);
 
-    const bot = { role: "assistant", content: res.data.reply };
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem("turbo_session_id");
+    } catch {
+      stored = null;
+    }
 
-    setMessages((m) => [...m, user, bot]);
-    setInput("");
-  }
+    if (stored) {
+      setSessionId(stored);
+    } else {
+      const id = createSessionId();
+      setSessionId(id);
+      try {
+        window.localStorage.setItem("turbo_session_id", id);
+      } catch {}
+    }
+  }, []);
+
+  const sendMessage = async (text: string) => {
+    const cleaned = text.trim();
+    if (!cleaned) return;
+
+    setMessages((prev) => [...prev, { role: "user", text: cleaned }]);
+
+    const res = await fetch("/api/agent/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: cleaned, session_id: sessionId || "default" }),
+    });
+
+    const data = await res.json();
+    setMessages((prev) => [...prev, { role: "assistant", text: data.reply || String(data) }]);
+  };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex-1 p-6 space-y-4 overflow-y-auto">
-        {messages.map((m, i) => (
-          <ChatMessage key={i} role={m.role} content={m.content} />
-        ))}
-      </div>
-
-      <div className="p-4 border-t border-neutral-700 flex space-x-2">
-        <input
-          className="flex-1 p-2 rounded bg-neutral-800"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-        <button
-          onClick={sendMessage}
-          className="px-4 py-2 bg-blue-600 rounded"
-        >
-          Send
-        </button>
-      </div>
-    </div>
+    <ChatLayout onSend={sendMessage}>
+      {messages.map((m, i) => (
+        <ChatMessage key={i} role={m.role as any} text={m.text} />
+      ))}
+    </ChatLayout>
   );
 }

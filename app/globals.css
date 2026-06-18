@@ -1,0 +1,126 @@
+/* Tailwind core */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* BODY BACKGROUND */
+body {
+  background-color: #0f0f0f;
+  color: #ffffff;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+/* SCROLLBAR */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
+/* Smooth font rendering on all elements */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Chat bubbles / content formatting */
+.chat-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* JSON block improvements */
+.json-block {
+  background: #0d0d0d;
+  border: 1px solid #333;
+  padding: 12px;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  overflow-x: auto;
+  color: #b6fcb6;
+}
+
+/* Tool output block */
+.tool-block {
+  background: #3d2e00;
+  border: 1px solid #e2b400;
+  padding: 12px;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  white-space: pre-wrap;
+  color: #ffecb3;
+}
+
+/* Error block */
+.error-block {
+  background: #430000;
+  border: 1px solid #ff4d4d;
+  padding: 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  color: #ffb3b3;
+}
+
+/* Message bubble base */
+.bubble {
+  padding: 12px 16px;
+  border-radius: 16px;
+  max-width: 75%;
+  line-height: 1.5;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/* User bubble */
+.bubble-user {
+  background-color: #065fdb;
+  color: white;
+  margin-left: auto;
+}
+
+/* Assistant bubble */
+.bubble-assistant {
+  background-color: #1f1f1f;
+  color: #a0ff95;
+}
+
+/* System bubble */
+.bubble-system {
+  background-color: #2b2b2b;
+  color: #cccccc;
+  font-size: 0.9rem;
+}
+
+/* Tool bubble */
+.bubble-tool {
+  background-color: #4e3a00;
+  color: #ffe9a8;
+  border: 1px solid #d6a500;
+}
+
+/* Error bubble */
+.bubble-error {
+  background-color: #5e0000;
+  color: #ffb0b0;
+  border: 1px solid #ff3838;
+}

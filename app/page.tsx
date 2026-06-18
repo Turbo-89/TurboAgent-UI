@@ -1,7 +1,14 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
 export default function Home() {
-  return (
-    <div className="p-8 text-3xl font-bold">
-      TurboAgent UI
-    </div>
-  );
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/chat");
+  }, [router]);
+
+  return null;
 }

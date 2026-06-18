@@ -15,3 +15,9 @@ yarn-error.log*
 # Build
 dist/
 .out/
+
+# Local secrets / credentials
+config/google_oauth.json
+.env.local
+.env*.local
+*.secret.json

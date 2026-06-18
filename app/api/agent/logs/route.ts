@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import axios from "axios";
 
 export async function GET() {
-  const r = await axios.get("http://localhost:8000/logs");
-  return NextResponse.json(r.data);
+  try {
+    const res = await fetch("http://localhost:8000/logs");
+    const data = await res.json();
+    return NextResponse.json(data);
+
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }

@@ -1,17 +1,29 @@
 "use client";
-import axios from "axios";
+
+import ChatLayout from "@/components/ChatLayout";
+import ChatMessage from "@/components/ChatMessage";
+import { useState } from "react";
 
 export default function CommandsPage() {
-  async function run(endpoint, args = {}) {
-    await axios.post("/api/agent/action", { endpoint, args });
-  }
+  const [messages, setMessages] = useState([]);
+
+  const runCommand = async (cmd: string) => {
+    setMessages((prev) => [...prev, { role: "user", text: cmd }]);
+
+    const res = await fetch("/api/agent/action", {
+      method: "POST",
+      body: JSON.stringify({ command: cmd })
+    });
+
+    const data = await res.json();
+    setMessages((prev) => [...prev, { role: "assistant", text: data.output }]);
+  };
 
   return (
-    <div className="p-6 space-y-4">
-      <button className="btn" onClick={() => run("generate")}>Genereer Pagina's</button>
-      <button className="btn" onClick={() => run("seo")}>SEO Analyse</button>
-      <button className="btn" onClick={() => run("video")}>Promo Video</button>
-      <button className="btn" onClick={() => run("deploy")}>Deploy</button>
-    </div>
+    <ChatLayout>
+      {messages.map((m, i) => (
+        <ChatMessage key={i} role={m.role as any} text={m.text} />
+      ))}
+    </ChatLayout>
   );
 }
