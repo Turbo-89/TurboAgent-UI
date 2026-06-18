@@ -18,10 +18,12 @@ type ProviderStatus = {
 
 type Opportunity = {
   type?: string;
+  action_type?: string;
   score?: number;
   priority?: string;
   region?: string;
   reason?: string;
+  notes?: string[];
   recommended_action?: string;
   expected_impact?: string;
   confidence?: string | number;
@@ -77,6 +79,17 @@ type ImplementationPlan = {
   read_only_guarantees?: string[];
 };
 
+type ChecklistKey =
+  | "planReviewed"
+  | "seoReviewed"
+  | "contentReviewed"
+  | "schemaReviewed"
+  | "linksReviewed"
+  | "risksReviewed"
+  | "approvalStillRequired";
+
+type ReviewChecklist = Record<ChecklistKey, boolean>;
+
 const SAMPLE_SIGNALS = JSON.stringify(
   [
     {
@@ -121,6 +134,138 @@ function compactJson(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
+function markdownValue(value: unknown): string {
+  if (value === undefined || value === null) return "None";
+  if (Array.isArray(value)) {
+    if (!value.length) return "None";
+    return value
+      .map((item) =>
+        typeof item === "string"
+          ? `- ${item}`
+          : `- \`${JSON.stringify(item)}\``,
+      )
+      .join("\n");
+  }
+  if (typeof value === "object") {
+    return `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
+  }
+  return String(value);
+}
+
+function opportunityServiceLabel(opportunity?: Opportunity | null) {
+  if (!opportunity) return "None";
+  return (
+    opportunity.service_intent?.canonical_service ||
+    opportunity.service_intent?.display_name ||
+    "None"
+  );
+}
+
+function isRookdetectiePlan(plan?: ImplementationPlan | null) {
+  return plan?.service_intent?.canonical_service === "rookdetectie_geuropsporing";
+}
+
+function buildPlanMarkdown(
+  opportunity: Opportunity | null,
+  plan: ImplementationPlan,
+) {
+  const sections = [
+    "# Landing Page Implementation Plan",
+    "",
+    "Planning review only. This is a proposed/read-only plan and does not approve implementation, file changes, deploys, publishing, merges, pushes, Ads changes, or GA4 changes.",
+    "",
+    "## Selected Opportunity",
+    `- Type: ${opportunity?.type || opportunity?.action_type || "None"}`,
+    `- Service: ${opportunityServiceLabel(opportunity)}`,
+    `- Region: ${opportunity?.region || "None"}`,
+    `- Score: ${opportunity?.score ?? "None"}`,
+    `- Reason: ${opportunity?.reason || "None"}`,
+    `- Notes: ${opportunity?.notes?.length ? opportunity.notes.join(", ") : "None"}`,
+    "",
+    "## Page Basics",
+    `- Opportunity ID: ${plan.opportunity_id || "None"}`,
+    `- Action type: ${plan.action_type || "None"}`,
+    `- Page type: ${plan.page_type || "None"}`,
+    `- Service label: ${plan.service_label || "None"}`,
+    `- Region: ${plan.region || "None"}`,
+    `- Proposed slug: ${plan.proposed_slug || "None"}`,
+    `- Proposed URL path: ${plan.proposed_url_path || "None"}`,
+    "",
+    "## SEO Metadata",
+    `- SEO title: ${plan.seo_title || "None"}`,
+    `- Meta description: ${plan.meta_description || "None"}`,
+    "",
+    "## H1, H2, and Content Outline",
+    `- H1: ${plan.h1 || "None"}`,
+    "",
+    "### H2 Outline",
+    markdownValue(plan.h2_outline),
+    "",
+    "### Content Outline",
+    markdownValue(plan.content_outline),
+    "",
+    "## Schema Plan",
+    markdownValue(plan.schema_plan),
+    "",
+    "## Internal Links",
+    markdownValue(plan.internal_links),
+    "",
+    "## Likely/Proposed Turbo Services Files",
+    markdownValue(plan.likely_turboservices_files),
+    "",
+    "## Validation Commands",
+    markdownValue(plan.validation_commands),
+    "",
+    "## Risks",
+    markdownValue(plan.risks),
+    "",
+    "## Approval Gates",
+    markdownValue(plan.approval_gates),
+    "",
+    "## Read-only Guarantees",
+    markdownValue(plan.read_only_guarantees),
+  ];
+
+  if (isRookdetectiePlan(plan)) {
+    sections.push(
+      "",
+      "## Rookdetectie Business Rule",
+      "Turbo Services rookdetectie means rooktest/geuropsporing/rioolgeur/riolering/riool/afvoer. It does not mean rookmelders/brandveiligheid/branddetectie/brandalarm.",
+    );
+  }
+
+  return sections.join("\n");
+}
+
+function buildApprovalChecklistMarkdown(
+  opportunity: Opportunity | null,
+  plan: ImplementationPlan,
+) {
+  return [
+    "# Planning Approval Checklist",
+    "",
+    "Planning review only. Approval here is for planning review, not execution.",
+    "",
+    `- Opportunity: ${plan.opportunity_id || opportunity?.type || "None"}`,
+    `- Service: ${plan.service_label || opportunityServiceLabel(opportunity)}`,
+    `- Region: ${plan.region || opportunity?.region || "None"}`,
+    "",
+    "- [ ] Plan reviewed",
+    "- [ ] SEO metadata reviewed",
+    "- [ ] Content outline reviewed",
+    "- [ ] Schema plan reviewed",
+    "- [ ] Internal links reviewed",
+    "- [ ] Risks reviewed",
+    "- [ ] Explicit approval still required before implementation",
+    "",
+    "Approval gates:",
+    markdownValue(plan.approval_gates),
+    "",
+    "Read-only guarantees:",
+    markdownValue(plan.read_only_guarantees),
+  ].join("\n");
+}
+
 function textList(items?: string[]) {
   if (!items?.length) {
     return <p className="text-sm text-neutral-400">None</p>;
@@ -154,6 +299,19 @@ export default function OpportunitiesPage() {
     string | null
   >(null);
   const [activePlanIndex, setActivePlanIndex] = useState<number | null>(null);
+  const [selectedOpportunity, setSelectedOpportunity] =
+    useState<Opportunity | null>(null);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [reviewChecklist, setReviewChecklist] = useState<ReviewChecklist>({
+    planReviewed: false,
+    seoReviewed: false,
+    contentReviewed: false,
+    schemaReviewed: false,
+    linksReviewed: false,
+    risksReviewed: false,
+    approvalStillRequired: false,
+  });
 
   useEffect(() => {
     async function loadStatus() {
@@ -190,6 +348,9 @@ export default function OpportunitiesPage() {
     setImplementationPlan(null);
     setImplementationPlanError(null);
     setActivePlanIndex(null);
+    setSelectedOpportunity(null);
+    setCopyStatus(null);
+    setCopyError(null);
 
     try {
       let parsedSampleSignals: unknown;
@@ -238,6 +399,18 @@ export default function OpportunitiesPage() {
     setActivePlanIndex(index);
     setImplementationPlan(null);
     setImplementationPlanError(null);
+    setSelectedOpportunity(opportunity);
+    setCopyStatus(null);
+    setCopyError(null);
+    setReviewChecklist({
+      planReviewed: false,
+      seoReviewed: false,
+      contentReviewed: false,
+      schemaReviewed: false,
+      linksReviewed: false,
+      risksReviewed: false,
+      approvalStillRequired: false,
+    });
 
     try {
       const response = await fetch(
@@ -264,6 +437,29 @@ export default function OpportunitiesPage() {
     } finally {
       setActivePlanIndex(null);
     }
+  }
+
+  async function copyTextToClipboard(text: string, successMessage: string) {
+    setCopyStatus(null);
+    setCopyError(null);
+
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard is not available in this browser.");
+      }
+
+      await navigator.clipboard.writeText(text);
+      setCopyStatus(successMessage);
+    } catch (err) {
+      setCopyError(err instanceof Error ? err.message : "Clipboard copy failed.");
+    }
+  }
+
+  function toggleChecklistItem(key: ChecklistKey) {
+    setReviewChecklist((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
   }
 
   return (
@@ -571,9 +767,14 @@ export default function OpportunitiesPage() {
 
                 <article className="border border-neutral-800 bg-neutral-900 p-4">
                   <div className="flex flex-col gap-1">
-                    <h2 className="text-lg font-medium">
-                      Proposed implementation plan
-                    </h2>
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <h2 className="text-lg font-medium">
+                        Proposed implementation plan
+                      </h2>
+                      <span className="w-fit border border-amber-800 bg-amber-950/40 px-3 py-1 text-xs uppercase text-amber-100">
+                        Planning review only
+                      </span>
+                    </div>
                     <p className="text-sm text-neutral-400">
                       Read-only proposal only. This page does not write files,
                       deploy, publish, merge, push, change Ads, or change GA4.
@@ -595,6 +796,127 @@ export default function OpportunitiesPage() {
 
                   {implementationPlan ? (
                     <div className="mt-4 flex flex-col gap-4">
+                      <section className="border border-neutral-800 bg-neutral-950 p-4">
+                        <h3 className="text-sm font-medium">
+                          Selected opportunity
+                        </h3>
+                        <dl className="mt-3 grid gap-2 text-sm text-neutral-300 md:grid-cols-2">
+                          <div>
+                            type/action_type:{" "}
+                            {selectedOpportunity?.type ||
+                              selectedOpportunity?.action_type ||
+                              "None"}
+                          </div>
+                          <div>
+                            service:{" "}
+                            {implementationPlan.service_label ||
+                              opportunityServiceLabel(selectedOpportunity)}
+                          </div>
+                          <div>
+                            service_intent:{" "}
+                            {implementationPlan.service_intent
+                              ?.canonical_service ||
+                              selectedOpportunity?.service_intent
+                                ?.canonical_service ||
+                              "None"}
+                          </div>
+                          <div>
+                            region:{" "}
+                            {selectedOpportunity?.region ||
+                              implementationPlan.region ||
+                              "None"}
+                          </div>
+                          <div>
+                            score: {selectedOpportunity?.score ?? "None"}
+                          </div>
+                          <div className="md:col-span-2">
+                            reason/notes:{" "}
+                            {selectedOpportunity?.reason ||
+                              selectedOpportunity?.notes?.join(", ") ||
+                              "None"}
+                          </div>
+                        </dl>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyTextToClipboard(
+                                buildPlanMarkdown(
+                                  selectedOpportunity,
+                                  implementationPlan,
+                                ),
+                                "Plan copied as Markdown.",
+                              )
+                            }
+                            className="border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-700"
+                          >
+                            Copy plan as Markdown
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyTextToClipboard(
+                                buildApprovalChecklistMarkdown(
+                                  selectedOpportunity,
+                                  implementationPlan,
+                                ),
+                                "Approval checklist copied.",
+                              )
+                            }
+                            className="border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-700"
+                          >
+                            Copy approval checklist
+                          </button>
+                        </div>
+
+                        {copyStatus ? (
+                          <div className="mt-3 border border-emerald-900 bg-emerald-950/30 p-3 text-sm text-emerald-100">
+                            {copyStatus}
+                          </div>
+                        ) : null}
+                        {copyError ? (
+                          <div className="mt-3 border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+                            {copyError}
+                          </div>
+                        ) : null}
+                      </section>
+
+                      <section className="border border-neutral-800 bg-neutral-950 p-4">
+                        <h3 className="text-sm font-medium">
+                          Planning review checklist
+                        </h3>
+                        <div className="mt-3 grid gap-2 text-sm text-neutral-200 md:grid-cols-2">
+                          {[
+                            ["planReviewed", "Plan reviewed"],
+                            ["seoReviewed", "SEO metadata reviewed"],
+                            ["contentReviewed", "Content outline reviewed"],
+                            ["schemaReviewed", "Schema plan reviewed"],
+                            ["linksReviewed", "Internal links reviewed"],
+                            ["risksReviewed", "Risks reviewed"],
+                            [
+                              "approvalStillRequired",
+                              "Explicit approval still required before implementation",
+                            ],
+                          ].map(([key, label]) => (
+                            <label
+                              key={key}
+                              className="flex items-center gap-2"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={reviewChecklist[key as ChecklistKey]}
+                                onChange={() =>
+                                  toggleChecklistItem(key as ChecklistKey)
+                                }
+                                className="h-4 w-4"
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </section>
+
                       <section className="border border-neutral-800 bg-neutral-950 p-4">
                         <h3 className="text-sm font-medium">Page basics</h3>
                         <dl className="mt-3 grid gap-2 text-sm text-neutral-300 md:grid-cols-2">
