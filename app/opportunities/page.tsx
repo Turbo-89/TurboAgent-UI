@@ -48,6 +48,35 @@ type OpportunityResponse = {
   notes?: string[];
 };
 
+type ImplementationPlan = {
+  ok?: boolean;
+  error?: string;
+  opportunity_id?: string;
+  action_type?: string;
+  page_type?: string;
+  service_intent?: {
+    canonical_service?: string;
+    display_name?: string;
+    business_meaning?: string;
+  };
+  service_label?: string;
+  region?: string;
+  proposed_slug?: string;
+  proposed_url_path?: string;
+  seo_title?: string;
+  meta_description?: string;
+  h1?: string;
+  h2_outline?: string[];
+  content_outline?: string[];
+  schema_plan?: string[];
+  internal_links?: Array<Record<string, unknown>>;
+  likely_turboservices_files?: Array<Record<string, unknown>>;
+  validation_commands?: Array<Record<string, unknown>>;
+  risks?: Array<Record<string, unknown>>;
+  approval_gates?: string[];
+  read_only_guarantees?: string[];
+};
+
 const SAMPLE_SIGNALS = JSON.stringify(
   [
     {
@@ -92,6 +121,20 @@ function compactJson(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
+function textList(items?: string[]) {
+  if (!items?.length) {
+    return <p className="text-sm text-neutral-400">None</p>;
+  }
+
+  return (
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-200">
+      {items.map((item, index) => (
+        <li key={`${item}-${index}`}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
 export default function OpportunitiesPage() {
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(
     null,
@@ -105,6 +148,12 @@ export default function OpportunitiesPage() {
   const [scanResult, setScanResult] = useState<OpportunityResponse | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [implementationPlan, setImplementationPlan] =
+    useState<ImplementationPlan | null>(null);
+  const [implementationPlanError, setImplementationPlanError] = useState<
+    string | null
+  >(null);
+  const [activePlanIndex, setActivePlanIndex] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadStatus() {
@@ -138,6 +187,9 @@ export default function OpportunitiesPage() {
     setIsScanning(true);
     setScanError(null);
     setScanResult(null);
+    setImplementationPlan(null);
+    setImplementationPlanError(null);
+    setActivePlanIndex(null);
 
     try {
       let parsedSampleSignals: unknown;
@@ -176,6 +228,41 @@ export default function OpportunitiesPage() {
       setScanError(err instanceof Error ? err.message : "Opportunity scan failed.");
     } finally {
       setIsScanning(false);
+    }
+  }
+
+  async function loadImplementationPlan(
+    opportunity: Opportunity,
+    index: number,
+  ) {
+    setActivePlanIndex(index);
+    setImplementationPlan(null);
+    setImplementationPlanError(null);
+
+    try {
+      const response = await fetch(
+        backendUrl("/api/opportunities/landing-pages/implementation-plan"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(opportunity),
+        },
+      );
+      const data = (await response.json().catch(() => null)) as
+        | ImplementationPlan
+        | null;
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Implementation plan failed.");
+      }
+
+      setImplementationPlan(data);
+    } catch (err) {
+      setImplementationPlanError(
+        err instanceof Error ? err.message : "Implementation plan failed.",
+      );
+    } finally {
+      setActivePlanIndex(null);
     }
   }
 
@@ -378,6 +465,17 @@ export default function OpportunitiesPage() {
                           </div>
                         </div>
 
+                        <button
+                          type="button"
+                          onClick={() => loadImplementationPlan(opportunity, index)}
+                          disabled={activePlanIndex === index}
+                          className="mt-4 border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-700 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {activePlanIndex === index
+                            ? "Loading plan..."
+                            : "Implementation plan"}
+                        </button>
+
                         <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
                           <div>
                             <dt className="text-xs uppercase text-neutral-500">
@@ -469,6 +567,154 @@ export default function OpportunitiesPage() {
                       </p>
                     ) : null}
                   </div>
+                </article>
+
+                <article className="border border-neutral-800 bg-neutral-900 p-4">
+                  <div className="flex flex-col gap-1">
+                    <h2 className="text-lg font-medium">
+                      Proposed implementation plan
+                    </h2>
+                    <p className="text-sm text-neutral-400">
+                      Read-only proposal only. This page does not write files,
+                      deploy, publish, merge, push, change Ads, or change GA4.
+                    </p>
+                  </div>
+
+                  {implementationPlanError ? (
+                    <div className="mt-3 border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+                      {implementationPlanError}
+                    </div>
+                  ) : null}
+
+                  {!implementationPlan && !implementationPlanError ? (
+                    <p className="mt-3 text-sm text-neutral-400">
+                      Select an opportunity implementation plan to review the
+                      proposed page work.
+                    </p>
+                  ) : null}
+
+                  {implementationPlan ? (
+                    <div className="mt-4 flex flex-col gap-4">
+                      <section className="border border-neutral-800 bg-neutral-950 p-4">
+                        <h3 className="text-sm font-medium">Page basics</h3>
+                        <dl className="mt-3 grid gap-2 text-sm text-neutral-300 md:grid-cols-2">
+                          <div>opportunity_id: {implementationPlan.opportunity_id || "None"}</div>
+                          <div>action_type: {implementationPlan.action_type || "None"}</div>
+                          <div>page_type: {implementationPlan.page_type || "None"}</div>
+                          <div>service_label: {implementationPlan.service_label || "None"}</div>
+                          <div>region: {implementationPlan.region || "None"}</div>
+                          <div>proposed_slug: {implementationPlan.proposed_slug || "None"}</div>
+                          <div className="md:col-span-2">
+                            proposed_url_path:{" "}
+                            {implementationPlan.proposed_url_path || "None"}
+                          </div>
+                        </dl>
+
+                        {implementationPlan.service_intent?.canonical_service ===
+                        "rookdetectie_geuropsporing" ? (
+                          <div className="mt-4 border border-amber-900 bg-amber-950/30 p-3 text-sm text-amber-100">
+                            Turbo Services rookdetectie means rooktest,
+                            geuropsporing, rioolgeur, riolering, riool, and
+                            afvoer. It does not mean rookmelders,
+                            brandveiligheid, branddetectie, or brandalarm.
+                          </div>
+                        ) : null}
+                      </section>
+
+                      <section className="border border-neutral-800 bg-neutral-950 p-4">
+                        <h3 className="text-sm font-medium">SEO metadata</h3>
+                        <dl className="mt-3 grid gap-3 text-sm">
+                          <div>
+                            <dt className="text-xs uppercase text-neutral-500">
+                              SEO title
+                            </dt>
+                            <dd className="mt-1 text-neutral-200">
+                              {implementationPlan.seo_title || "None"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs uppercase text-neutral-500">
+                              Meta description
+                            </dt>
+                            <dd className="mt-1 text-neutral-200">
+                              {implementationPlan.meta_description || "None"}
+                            </dd>
+                          </div>
+                        </dl>
+                      </section>
+
+                      <section className="border border-neutral-800 bg-neutral-950 p-4">
+                        <h3 className="text-sm font-medium">
+                          H1, H2, and content outline
+                        </h3>
+                        <div className="mt-3 text-sm text-neutral-200">
+                          H1: {implementationPlan.h1 || "None"}
+                        </div>
+                        <h4 className="mt-4 text-xs uppercase text-neutral-500">
+                          H2 outline
+                        </h4>
+                        {textList(implementationPlan.h2_outline)}
+                        <h4 className="mt-4 text-xs uppercase text-neutral-500">
+                          Content outline
+                        </h4>
+                        {textList(implementationPlan.content_outline)}
+                      </section>
+
+                      <section className="grid gap-4 md:grid-cols-2">
+                        <div className="border border-neutral-800 bg-neutral-950 p-4">
+                          <h3 className="text-sm font-medium">Schema plan</h3>
+                          {textList(implementationPlan.schema_plan)}
+                        </div>
+                        <div className="border border-neutral-800 bg-neutral-950 p-4">
+                          <h3 className="text-sm font-medium">Internal links</h3>
+                          <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                            {compactJson(implementationPlan.internal_links)}
+                          </pre>
+                        </div>
+                      </section>
+
+                      <section className="border border-neutral-800 bg-neutral-950 p-4">
+                        <h3 className="text-sm font-medium">
+                          Likely/proposed Turbo Services files
+                        </h3>
+                        <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                          {compactJson(
+                            implementationPlan.likely_turboservices_files,
+                          )}
+                        </pre>
+                      </section>
+
+                      <section className="grid gap-4 md:grid-cols-2">
+                        <div className="border border-neutral-800 bg-neutral-950 p-4">
+                          <h3 className="text-sm font-medium">
+                            Validation commands
+                          </h3>
+                          <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                            {compactJson(implementationPlan.validation_commands)}
+                          </pre>
+                        </div>
+                        <div className="border border-neutral-800 bg-neutral-950 p-4">
+                          <h3 className="text-sm font-medium">Risks</h3>
+                          <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                            {compactJson(implementationPlan.risks)}
+                          </pre>
+                        </div>
+                      </section>
+
+                      <section className="grid gap-4 md:grid-cols-2">
+                        <div className="border border-neutral-800 bg-neutral-950 p-4">
+                          <h3 className="text-sm font-medium">Approval gates</h3>
+                          {textList(implementationPlan.approval_gates)}
+                        </div>
+                        <div className="border border-neutral-800 bg-neutral-950 p-4">
+                          <h3 className="text-sm font-medium">
+                            Read-only guarantees
+                          </h3>
+                          {textList(implementationPlan.read_only_guarantees)}
+                        </div>
+                      </section>
+                    </div>
+                  ) : null}
                 </article>
               </>
             ) : null}
