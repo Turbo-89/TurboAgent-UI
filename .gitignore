@@ -21,3 +21,9 @@ generated/assets/
 generated/content/
 generated/pages/
 generated/tokens/
+
+# Local secrets / credentials
+config/
+.env.local
+.env*.local
+*.secret.json
