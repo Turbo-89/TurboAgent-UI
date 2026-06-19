@@ -121,6 +121,30 @@ type FinalImplementationReview = {
   next_allowed_step?: string;
 };
 
+type PatchProposal = {
+  ok?: boolean;
+  error?: string;
+  patch_proposal_id?: string;
+  source_review_id?: string;
+  patch_readiness_status?: string;
+  proposed_file_patches?: Array<Record<string, unknown>>;
+  proposed_new_files?: Array<Record<string, unknown>>;
+  proposed_modified_files?: Array<Record<string, unknown>>;
+  proposed_deleted_files?: Array<Record<string, unknown>>;
+  proposed_content_changes?: Array<Record<string, unknown>>;
+  proposed_seo_changes?: Record<string, unknown>;
+  proposed_schema_changes?: Record<string, unknown>;
+  proposed_internal_link_changes?: Record<string, unknown>;
+  validation_commands?: Array<Record<string, unknown>>;
+  manual_review_checklist?: string[];
+  risks?: Array<Record<string, unknown>>;
+  blocked_actions?: string[];
+  approval_gates?: string[];
+  read_only_guarantees?: string[];
+  final_user_approval_required?: boolean;
+  next_allowed_step?: string;
+};
+
 type ChecklistKey =
   | "planReviewed"
   | "seoReviewed"
@@ -539,6 +563,69 @@ function buildFinalReviewMarkdown(review: FinalImplementationReview) {
   ].join("\n");
 }
 
+function buildPatchProposalMarkdown(proposal: PatchProposal) {
+  return [
+    "# Patch Proposal",
+    "",
+    "Patch proposal only - this does not authorize file changes, deploy, publish, Ads changes, GA4 changes, merge, or push.",
+    "",
+    "## Proposal IDs",
+    `- Patch proposal ID: ${proposal.patch_proposal_id || "None"}`,
+    `- Source review ID: ${proposal.source_review_id || "None"}`,
+    "",
+    "## Patch Readiness Status",
+    proposal.patch_readiness_status || "None",
+    "",
+    "## Proposed File Patches",
+    markdownValue(proposal.proposed_file_patches),
+    "",
+    "## Proposed New Files",
+    markdownValue(proposal.proposed_new_files),
+    "",
+    "## Proposed Modified Files",
+    markdownValue(proposal.proposed_modified_files),
+    "",
+    "## Proposed Deleted Files",
+    markdownValue(proposal.proposed_deleted_files),
+    "",
+    "## Proposed Content Changes",
+    markdownValue(proposal.proposed_content_changes),
+    "",
+    "## Proposed SEO Changes",
+    markdownValue(proposal.proposed_seo_changes),
+    "",
+    "## Proposed Schema Changes",
+    markdownValue(proposal.proposed_schema_changes),
+    "",
+    "## Proposed Internal Link Changes",
+    markdownValue(proposal.proposed_internal_link_changes),
+    "",
+    "## Validation Commands",
+    markdownValue(proposal.validation_commands),
+    "",
+    "## Manual Review Checklist",
+    markdownValue(proposal.manual_review_checklist),
+    "",
+    "## Risks",
+    markdownValue(proposal.risks),
+    "",
+    "## Blocked Actions",
+    markdownValue(proposal.blocked_actions),
+    "",
+    "## Approval Gates",
+    markdownValue(proposal.approval_gates),
+    "",
+    "## Read-only Guarantees",
+    markdownValue(proposal.read_only_guarantees),
+    "",
+    "## Final User Approval Required",
+    String(proposal.final_user_approval_required ?? "None"),
+    "",
+    "## Next Allowed Step",
+    proposal.next_allowed_step || "None",
+  ].join("\n");
+}
+
 function textList(items?: string[]) {
   if (!items?.length) {
     return <p className="text-sm text-neutral-400">None</p>;
@@ -590,6 +677,12 @@ export default function OpportunitiesPage() {
     useState<FinalImplementationReview | null>(null);
   const [finalReviewError, setFinalReviewError] = useState<string | null>(null);
   const [isRunningFinalReview, setIsRunningFinalReview] = useState(false);
+  const [patchProposal, setPatchProposal] = useState<PatchProposal | null>(null);
+  const [patchProposalError, setPatchProposalError] = useState<string | null>(
+    null,
+  );
+  const [isGeneratingPatchProposal, setIsGeneratingPatchProposal] =
+    useState(false);
 
   const missingReviewItems = missingChecklistItems(reviewChecklist);
   const isReviewComplete = missingReviewItems.length === 0;
@@ -639,6 +732,9 @@ export default function OpportunitiesPage() {
     setFinalReview(null);
     setFinalReviewError(null);
     setIsRunningFinalReview(false);
+    setPatchProposal(null);
+    setPatchProposalError(null);
+    setIsGeneratingPatchProposal(false);
 
     try {
       let parsedSampleSignals: unknown;
@@ -698,6 +794,9 @@ export default function OpportunitiesPage() {
     setFinalReview(null);
     setFinalReviewError(null);
     setIsRunningFinalReview(false);
+    setPatchProposal(null);
+    setPatchProposalError(null);
+    setIsGeneratingPatchProposal(false);
 
     try {
       const response = await fetch(
@@ -752,6 +851,8 @@ export default function OpportunitiesPage() {
     setImplementationDraftError(null);
     setFinalReview(null);
     setFinalReviewError(null);
+    setPatchProposal(null);
+    setPatchProposalError(null);
   }
 
   function approveForNextPlanningStep() {
@@ -763,6 +864,8 @@ export default function OpportunitiesPage() {
     setImplementationDraftError(null);
     setFinalReview(null);
     setFinalReviewError(null);
+    setPatchProposal(null);
+    setPatchProposalError(null);
   }
 
   async function generateImplementationDraft() {
@@ -772,6 +875,8 @@ export default function OpportunitiesPage() {
     setImplementationDraftError(null);
     setFinalReview(null);
     setFinalReviewError(null);
+    setPatchProposal(null);
+    setPatchProposalError(null);
     setCopyStatus(null);
     setCopyError(null);
 
@@ -820,6 +925,8 @@ export default function OpportunitiesPage() {
     setIsRunningFinalReview(true);
     setFinalReview(null);
     setFinalReviewError(null);
+    setPatchProposal(null);
+    setPatchProposalError(null);
     setCopyStatus(null);
     setCopyError(null);
 
@@ -862,6 +969,55 @@ export default function OpportunitiesPage() {
       );
     } finally {
       setIsRunningFinalReview(false);
+    }
+  }
+
+  async function generatePatchProposal() {
+    if (!implementationPlan || !implementationDraft || !finalReview) return;
+    setIsGeneratingPatchProposal(true);
+    setPatchProposal(null);
+    setPatchProposalError(null);
+    setCopyStatus(null);
+    setCopyError(null);
+
+    const implementationPackage = buildImplementationPackageMarkdown(
+      selectedOpportunity,
+      implementationPlan,
+      implementationDraft,
+    );
+
+    try {
+      const response = await fetch(
+        backendUrl("/api/opportunities/landing-pages/patch-proposal"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            selected_opportunity: selectedOpportunity,
+            implementation_plan: implementationPlan,
+            implementation_draft: implementationDraft,
+            implementation_package: implementationPackage,
+            final_implementation_review: finalReview,
+            approval_timestamp: approvalTimestamp,
+            checklist_status: reviewChecklist,
+          }),
+        },
+      );
+      const data = (await response.json().catch(() => null)) as
+        | PatchProposal
+        | null;
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Patch proposal failed.");
+      }
+
+      setPatchProposal(data);
+    } catch (err) {
+      setPatchProposalError(
+        err instanceof Error ? err.message : "Patch proposal failed.",
+      );
+    } finally {
+      setIsGeneratingPatchProposal(false);
     }
   }
 
@@ -1947,6 +2103,267 @@ export default function OpportunitiesPage() {
                                       {textList(
                                         finalReview.read_only_guarantees,
                                       )}
+                                    </div>
+                                  </section>
+                                </div>
+                              ) : null}
+                            </section>
+
+                            <section className="border border-neutral-800 bg-neutral-900 p-4">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                  <h4 className="text-sm font-medium">
+                                    Patch proposal
+                                  </h4>
+                                  <p className="mt-1 text-sm text-neutral-400">
+                                    Patch proposal only - this does not
+                                    authorize file changes, deploy, publish,
+                                    Ads, GA4, merge, or push.
+                                  </p>
+                                </div>
+                                <span className="w-fit border border-amber-800 bg-amber-950/40 px-3 py-1 text-xs uppercase text-amber-100">
+                                  Read-only patch proposal
+                                </span>
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={generatePatchProposal}
+                                  disabled={
+                                    !finalReview ||
+                                    isGeneratingPatchProposal
+                                  }
+                                  className="border border-neutral-700 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                                >
+                                  {isGeneratingPatchProposal
+                                    ? "Generating patch proposal..."
+                                    : "Generate patch proposal"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    patchProposal
+                                      ? copyTextToClipboard(
+                                          buildPatchProposalMarkdown(
+                                            patchProposal,
+                                          ),
+                                          "Patch proposal copied as Markdown.",
+                                        )
+                                      : undefined
+                                  }
+                                  disabled={!patchProposal}
+                                  className="border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Copy patch proposal as Markdown
+                                </button>
+                              </div>
+
+                              {!finalReview ? (
+                                <p className="mt-3 text-sm text-neutral-400">
+                                  A final implementation review is required
+                                  before a patch proposal can be requested.
+                                </p>
+                              ) : null}
+
+                              {patchProposalError ? (
+                                <div className="mt-3 border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+                                  {patchProposalError}
+                                </div>
+                              ) : null}
+
+                              {patchProposal ? (
+                                <div className="mt-4 flex flex-col gap-4">
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <h5 className="text-sm font-medium">
+                                      Patch proposal id / source review id
+                                    </h5>
+                                    <dl className="mt-3 grid gap-2 text-sm text-neutral-300 md:grid-cols-2">
+                                      <div>
+                                        patch_proposal_id:{" "}
+                                        {patchProposal.patch_proposal_id ||
+                                          "None"}
+                                      </div>
+                                      <div>
+                                        source_review_id:{" "}
+                                        {patchProposal.source_review_id ||
+                                          "None"}
+                                      </div>
+                                    </dl>
+                                  </section>
+
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <h5 className="text-sm font-medium">
+                                      Patch readiness status
+                                    </h5>
+                                    <p className="mt-2 text-sm text-neutral-200">
+                                      {patchProposal.patch_readiness_status ||
+                                        "None"}
+                                    </p>
+                                  </section>
+
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <h5 className="text-sm font-medium">
+                                      Proposed file patches
+                                    </h5>
+                                    <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                      {compactJson(
+                                        patchProposal.proposed_file_patches,
+                                      )}
+                                    </pre>
+                                  </section>
+
+                                  <section className="grid gap-4 md:grid-cols-3">
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Proposed new files
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          patchProposal.proposed_new_files,
+                                        )}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Proposed modified files
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          patchProposal.proposed_modified_files,
+                                        )}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Proposed deleted files
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          patchProposal.proposed_deleted_files,
+                                        )}
+                                      </pre>
+                                    </div>
+                                  </section>
+
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <h5 className="text-sm font-medium">
+                                      Proposed content changes
+                                    </h5>
+                                    <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                      {compactJson(
+                                        patchProposal.proposed_content_changes,
+                                      )}
+                                    </pre>
+                                  </section>
+
+                                  <section className="grid gap-4 md:grid-cols-3">
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Proposed SEO changes
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          patchProposal.proposed_seo_changes,
+                                        )}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Proposed schema changes
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          patchProposal.proposed_schema_changes,
+                                        )}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Proposed internal link changes
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          patchProposal
+                                            .proposed_internal_link_changes,
+                                        )}
+                                      </pre>
+                                    </div>
+                                  </section>
+
+                                  <section className="grid gap-4 md:grid-cols-2">
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Validation commands
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          patchProposal.validation_commands,
+                                        )}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Manual review checklist
+                                      </h5>
+                                      {textList(
+                                        patchProposal.manual_review_checklist,
+                                      )}
+                                    </div>
+                                  </section>
+
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <h5 className="text-sm font-medium">
+                                      Risks
+                                    </h5>
+                                    <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                      {compactJson(patchProposal.risks)}
+                                    </pre>
+                                  </section>
+
+                                  <section className="grid gap-4 md:grid-cols-3">
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Blocked actions
+                                      </h5>
+                                      {textList(patchProposal.blocked_actions)}
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Approval gates
+                                      </h5>
+                                      {textList(patchProposal.approval_gates)}
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Read-only guarantees
+                                      </h5>
+                                      {textList(
+                                        patchProposal.read_only_guarantees,
+                                      )}
+                                    </div>
+                                  </section>
+
+                                  <section className="grid gap-4 md:grid-cols-2">
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Final user approval required
+                                      </h5>
+                                      <p className="mt-2 text-sm text-neutral-200">
+                                        {String(
+                                          patchProposal
+                                            .final_user_approval_required,
+                                        )}
+                                      </p>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Next allowed step
+                                      </h5>
+                                      <p className="mt-2 text-sm text-neutral-200">
+                                        {patchProposal.next_allowed_step ||
+                                          "None"}
+                                      </p>
                                     </div>
                                   </section>
                                 </div>
