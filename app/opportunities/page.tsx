@@ -156,6 +156,19 @@ type ChecklistKey =
 
 type ReviewChecklist = Record<ChecklistKey, boolean>;
 
+type FinalPatchChecklistKey =
+  | "patchProposalReviewed"
+  | "proposedFilesReviewed"
+  | "seoChangesReviewed"
+  | "contentChangesReviewed"
+  | "schemaChangesReviewed"
+  | "validationCommandsReviewed"
+  | "risksReviewed"
+  | "blockedActionsConfirmed"
+  | "explicitApprovalStillRequired";
+
+type FinalPatchChecklist = Record<FinalPatchChecklistKey, boolean>;
+
 const CHECKLIST_ITEMS: Array<{ key: ChecklistKey; label: string }> = [
   { key: "planReviewed", label: "Plan reviewed" },
   { key: "seoReviewed", label: "SEO metadata reviewed" },
@@ -177,6 +190,40 @@ const EMPTY_REVIEW_CHECKLIST: ReviewChecklist = {
   linksReviewed: false,
   risksReviewed: false,
   approvalStillRequired: false,
+};
+
+const FINAL_PATCH_CHECKLIST_ITEMS: Array<{
+  key: FinalPatchChecklistKey;
+  label: string;
+}> = [
+  { key: "patchProposalReviewed", label: "Patch proposal reviewed" },
+  { key: "proposedFilesReviewed", label: "Proposed files reviewed" },
+  { key: "seoChangesReviewed", label: "SEO changes reviewed" },
+  { key: "contentChangesReviewed", label: "Content changes reviewed" },
+  { key: "schemaChangesReviewed", label: "Schema changes reviewed" },
+  {
+    key: "validationCommandsReviewed",
+    label: "Validation commands reviewed",
+  },
+  { key: "risksReviewed", label: "Risks reviewed" },
+  { key: "blockedActionsConfirmed", label: "Blocked actions confirmed" },
+  {
+    key: "explicitApprovalStillRequired",
+    label:
+      "Explicit final user approval still required before touching turboservices",
+  },
+];
+
+const EMPTY_FINAL_PATCH_CHECKLIST: FinalPatchChecklist = {
+  patchProposalReviewed: false,
+  proposedFilesReviewed: false,
+  seoChangesReviewed: false,
+  contentChangesReviewed: false,
+  schemaChangesReviewed: false,
+  validationCommandsReviewed: false,
+  risksReviewed: false,
+  blockedActionsConfirmed: false,
+  explicitApprovalStillRequired: false,
 };
 
 const SAMPLE_SIGNALS = JSON.stringify(
@@ -363,6 +410,16 @@ function checklistMarkdown(checklist: ReviewChecklist) {
 
 function missingChecklistItems(checklist: ReviewChecklist) {
   return CHECKLIST_ITEMS.filter((item) => !checklist[item.key]);
+}
+
+function finalPatchChecklistMarkdown(checklist: FinalPatchChecklist) {
+  return FINAL_PATCH_CHECKLIST_ITEMS.map(
+    (item) => `- [${checklist[item.key] ? "x" : " "}] ${item.label}`,
+  ).join("\n");
+}
+
+function missingFinalPatchChecklistItems(checklist: FinalPatchChecklist) {
+  return FINAL_PATCH_CHECKLIST_ITEMS.filter((item) => !checklist[item.key]);
 }
 
 function buildHandoffBriefMarkdown(
@@ -626,6 +683,40 @@ function buildPatchProposalMarkdown(proposal: PatchProposal) {
   ].join("\n");
 }
 
+function buildFinalPatchApprovalBriefMarkdown(
+  proposal: PatchProposal,
+  checklist: FinalPatchChecklist,
+  approvalTimestamp: string,
+) {
+  return [
+    "# Final Patch Approval Brief",
+    "",
+    "Read-only local approval for patch preparation only. This is not approval to apply the patch.",
+    "",
+    "## Proposal IDs",
+    `- Patch proposal ID: ${proposal.patch_proposal_id || "None"}`,
+    `- Source review ID: ${proposal.source_review_id || "None"}`,
+    "",
+    "## Proposed Files",
+    markdownValue(proposal.proposed_file_patches),
+    "",
+    "## Checklist Status",
+    finalPatchChecklistMarkdown(checklist),
+    "",
+    "## Approval Timestamp",
+    approvalTimestamp || "Not approved",
+    "",
+    "## Blocked Actions",
+    markdownValue(proposal.blocked_actions),
+    "",
+    "## Next Allowed Step",
+    proposal.next_allowed_step || "None",
+    "",
+    "## Explicit Non-Authorization",
+    "This is not approval to apply the patch, write files, deploy, publish, merge, push, or change Ads/GA4.",
+  ].join("\n");
+}
+
 function textList(items?: string[]) {
   if (!items?.length) {
     return <p className="text-sm text-neutral-400">None</p>;
@@ -683,9 +774,16 @@ export default function OpportunitiesPage() {
   );
   const [isGeneratingPatchProposal, setIsGeneratingPatchProposal] =
     useState(false);
+  const [finalPatchChecklist, setFinalPatchChecklist] =
+    useState<FinalPatchChecklist>(EMPTY_FINAL_PATCH_CHECKLIST);
+  const [finalPatchApprovalTimestamp, setFinalPatchApprovalTimestamp] =
+    useState<string | null>(null);
 
   const missingReviewItems = missingChecklistItems(reviewChecklist);
   const isReviewComplete = missingReviewItems.length === 0;
+  const missingFinalPatchItems =
+    missingFinalPatchChecklistItems(finalPatchChecklist);
+  const isFinalPatchChecklistComplete = missingFinalPatchItems.length === 0;
 
   useEffect(() => {
     async function loadStatus() {
@@ -735,6 +833,8 @@ export default function OpportunitiesPage() {
     setPatchProposal(null);
     setPatchProposalError(null);
     setIsGeneratingPatchProposal(false);
+    setFinalPatchChecklist(EMPTY_FINAL_PATCH_CHECKLIST);
+    setFinalPatchApprovalTimestamp(null);
 
     try {
       let parsedSampleSignals: unknown;
@@ -797,6 +897,8 @@ export default function OpportunitiesPage() {
     setPatchProposal(null);
     setPatchProposalError(null);
     setIsGeneratingPatchProposal(false);
+    setFinalPatchChecklist(EMPTY_FINAL_PATCH_CHECKLIST);
+    setFinalPatchApprovalTimestamp(null);
 
     try {
       const response = await fetch(
@@ -853,6 +955,8 @@ export default function OpportunitiesPage() {
     setFinalReviewError(null);
     setPatchProposal(null);
     setPatchProposalError(null);
+    setFinalPatchChecklist(EMPTY_FINAL_PATCH_CHECKLIST);
+    setFinalPatchApprovalTimestamp(null);
   }
 
   function approveForNextPlanningStep() {
@@ -866,6 +970,8 @@ export default function OpportunitiesPage() {
     setFinalReviewError(null);
     setPatchProposal(null);
     setPatchProposalError(null);
+    setFinalPatchChecklist(EMPTY_FINAL_PATCH_CHECKLIST);
+    setFinalPatchApprovalTimestamp(null);
   }
 
   async function generateImplementationDraft() {
@@ -877,6 +983,8 @@ export default function OpportunitiesPage() {
     setFinalReviewError(null);
     setPatchProposal(null);
     setPatchProposalError(null);
+    setFinalPatchChecklist(EMPTY_FINAL_PATCH_CHECKLIST);
+    setFinalPatchApprovalTimestamp(null);
     setCopyStatus(null);
     setCopyError(null);
 
@@ -927,6 +1035,8 @@ export default function OpportunitiesPage() {
     setFinalReviewError(null);
     setPatchProposal(null);
     setPatchProposalError(null);
+    setFinalPatchChecklist(EMPTY_FINAL_PATCH_CHECKLIST);
+    setFinalPatchApprovalTimestamp(null);
     setCopyStatus(null);
     setCopyError(null);
 
@@ -977,6 +1087,8 @@ export default function OpportunitiesPage() {
     setIsGeneratingPatchProposal(true);
     setPatchProposal(null);
     setPatchProposalError(null);
+    setFinalPatchChecklist(EMPTY_FINAL_PATCH_CHECKLIST);
+    setFinalPatchApprovalTimestamp(null);
     setCopyStatus(null);
     setCopyError(null);
 
@@ -1019,6 +1131,21 @@ export default function OpportunitiesPage() {
     } finally {
       setIsGeneratingPatchProposal(false);
     }
+  }
+
+  function toggleFinalPatchChecklistItem(key: FinalPatchChecklistKey) {
+    setFinalPatchChecklist((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
+    setFinalPatchApprovalTimestamp(null);
+  }
+
+  function approvePatchForPreparationOnly() {
+    if (!isFinalPatchChecklistComplete) return;
+    setFinalPatchApprovalTimestamp(new Date().toLocaleString());
+    setCopyStatus(null);
+    setCopyError(null);
   }
 
   return (
@@ -2365,6 +2492,109 @@ export default function OpportunitiesPage() {
                                           "None"}
                                       </p>
                                     </div>
+                                  </section>
+
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                      <div>
+                                        <h5 className="text-sm font-medium">
+                                          Final patch review checklist
+                                        </h5>
+                                        <p className="mt-1 text-sm text-neutral-400">
+                                          Local approval for patch preparation
+                                          only. No files may be changed from
+                                          this UI.
+                                        </p>
+                                      </div>
+                                      <span className="w-fit border border-amber-800 bg-amber-950/40 px-3 py-1 text-xs uppercase text-amber-100">
+                                        Read-only local state
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-4 grid gap-2 text-sm text-neutral-200 md:grid-cols-2">
+                                      {FINAL_PATCH_CHECKLIST_ITEMS.map((item) => (
+                                        <label
+                                          key={item.key}
+                                          className="flex items-center gap-2"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={
+                                              finalPatchChecklist[item.key]
+                                            }
+                                            onChange={() =>
+                                              toggleFinalPatchChecklistItem(
+                                                item.key,
+                                              )
+                                            }
+                                            className="h-4 w-4"
+                                          />
+                                          {item.label}
+                                        </label>
+                                      ))}
+                                    </div>
+
+                                    {!isFinalPatchChecklistComplete ? (
+                                      <div className="mt-4 border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-300">
+                                        <div className="font-medium text-neutral-100">
+                                          Missing final patch review items
+                                        </div>
+                                        <ul className="mt-2 list-disc space-y-1 pl-5">
+                                          {missingFinalPatchItems.map((item) => (
+                                            <li key={item.key}>{item.label}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    ) : null}
+
+                                    <div className="mt-4 flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={
+                                          approvePatchForPreparationOnly
+                                        }
+                                        disabled={
+                                          !isFinalPatchChecklistComplete
+                                        }
+                                        className="border border-neutral-700 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                                      >
+                                        Mark patch proposal approved for
+                                        preparation only
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          copyTextToClipboard(
+                                            buildFinalPatchApprovalBriefMarkdown(
+                                              patchProposal,
+                                              finalPatchChecklist,
+                                              finalPatchApprovalTimestamp ||
+                                                "Not approved",
+                                            ),
+                                            "Final patch approval brief copied.",
+                                          )
+                                        }
+                                        className="border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-700"
+                                      >
+                                        Copy final patch approval brief
+                                      </button>
+                                    </div>
+
+                                    {finalPatchApprovalTimestamp ? (
+                                      <div className="mt-4 border border-emerald-900 bg-emerald-950/30 p-3 text-sm text-emerald-100">
+                                        Patch proposal approved for preparation
+                                        only - no files may be changed yet.
+                                        <div className="mt-1 text-emerald-200">
+                                          Approval timestamp:{" "}
+                                          {finalPatchApprovalTimestamp}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="mt-4 text-sm text-neutral-400">
+                                        No final patch preparation approval
+                                        recorded in this local UI state.
+                                      </p>
+                                    )}
                                   </section>
                                 </div>
                               ) : null}
