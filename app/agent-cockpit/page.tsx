@@ -137,6 +137,32 @@ const blockedActions = [
   "no GA4 changes",
 ];
 
+const roadmapPhases = [
+  {
+    phase: "2A \u2014 Local context discovery",
+    status: "completed",
+  },
+  {
+    phase: "2B \u2014 AI/SEO intelligence basis",
+    status: "completed",
+  },
+  {
+    phase: "2C \u2014 Opportunity to read-only patch preparation workflow",
+    status: "completed",
+  },
+  {
+    phase: "2D \u2014 Cockpit, status overview and operator control",
+    status: "in progress / closing",
+  },
+];
+
+const doNotExpandHere = [
+  "no more extra approval layers",
+  "no implementation in turboservices yet",
+  "no deploy/publish logic",
+  "no Ads/GA4 write logic",
+];
+
 function listOrFallback(value: string[] | undefined): string[] {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
@@ -317,6 +343,59 @@ export default function AgentCockpitPage() {
             {readiness?.safety_statement ||
               "The agent may propose and package work, but execution requires explicit human approval."}
           </p>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+          <article className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-5">
+            <h2 className="text-lg font-semibold">Roadmap status</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {roadmapPhases.map((item) => (
+                <div
+                  key={item.phase}
+                  className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-4"
+                >
+                  <p className="text-sm font-medium text-neutral-100">
+                    {item.phase}
+                  </p>
+                  <p
+                    className={`mt-2 text-xs font-medium ${
+                      item.status === "completed"
+                        ? "text-emerald-300"
+                        : "text-sky-300"
+                    }`}
+                  >
+                    {item.status}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <div className="flex flex-col gap-6">
+            <article className="rounded-lg border border-sky-900/70 bg-sky-950/20 p-5">
+              <h2 className="text-lg font-semibold text-sky-200">
+                Next phase candidate
+              </h2>
+              <p className="mt-3 text-sm font-medium text-sky-100">
+                2E {"\u2014"} Operator run history and audit trail
+              </p>
+              <p className="mt-3 text-sm text-sky-100/80">
+                The next useful phase should record what the agent proposed,
+                reviewed and copied, without executing anything.
+              </p>
+            </article>
+
+            <article className="rounded-lg border border-amber-900/70 bg-amber-950/20 p-5">
+              <h2 className="text-lg font-semibold text-amber-200">
+                Do not expand here
+              </h2>
+              <ul className="mt-4 space-y-2 text-sm text-amber-100">
+                {doNotExpandHere.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
         </section>
 
         <section className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-5">
