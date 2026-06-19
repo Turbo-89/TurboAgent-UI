@@ -403,6 +403,61 @@ function buildImplementationDraftMarkdown(draft: ImplementationDraft) {
   ].join("\n");
 }
 
+function buildImplementationPackageMarkdown(
+  opportunity: Opportunity | null,
+  plan: ImplementationPlan,
+  draft: ImplementationDraft,
+) {
+  return [
+    "# Implementation Package",
+    "",
+    "This package is for later review only.",
+    "No file changes are authorized.",
+    "No deploy, publish, merge, or push is authorized.",
+    "No Ads or GA4 changes are authorized.",
+    "Next allowed step: implementation patch preparation only after explicit final approval.",
+    "",
+    "## Source Opportunity",
+    `- Type: ${opportunity?.type || opportunity?.action_type || "None"}`,
+    `- Service: ${plan.service_label || opportunityServiceLabel(opportunity)}`,
+    `- Service intent: ${plan.service_intent?.canonical_service || opportunity?.service_intent?.canonical_service || "None"}`,
+    `- Region: ${plan.region || opportunity?.region || "None"}`,
+    `- Score: ${opportunity?.score ?? "None"}`,
+    `- Reason: ${opportunity?.reason || "None"}`,
+    "",
+    "## IDs",
+    `- Implementation plan ID: ${plan.opportunity_id || draft.source_plan_id || "None"}`,
+    `- Implementation draft ID: ${draft.draft_id || "None"}`,
+    "",
+    "## Proposed File List",
+    markdownValue(draft.proposed_files),
+    "",
+    "## Proposed Route / Path",
+    markdownValue(draft.proposed_route_structure),
+    "",
+    "## SEO Metadata",
+    markdownValue(draft.proposed_seo_metadata),
+    "",
+    "## Content Blocks Summary",
+    markdownValue(draft.proposed_content_blocks),
+    "",
+    "## Schema Summary",
+    markdownValue(draft.proposed_schema_jsonld),
+    "",
+    "## Validation Plan",
+    markdownValue(draft.proposed_validation_plan),
+    "",
+    "## Blocked Actions",
+    markdownValue(draft.blocked_actions),
+    "",
+    "## Required Final Approvals",
+    markdownValue(draft.approval_gates),
+    "",
+    "## Read-only Guarantees",
+    markdownValue(draft.read_only_guarantees),
+  ].join("\n");
+}
+
 function textList(items?: string[]) {
   if (!items?.length) {
     return <p className="text-sm text-neutral-400">None</p>;
@@ -1372,6 +1427,157 @@ export default function OpportunitiesPage() {
                                 {textList(
                                   implementationDraft.read_only_guarantees,
                                 )}
+                              </div>
+                            </section>
+
+                            <section className="border border-neutral-800 bg-neutral-900 p-4">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                  <h4 className="text-sm font-medium">
+                                    Implementation package
+                                  </h4>
+                                  <p className="mt-1 text-sm text-neutral-400">
+                                    Structured review package for later explicit
+                                    implementation approval only.
+                                  </p>
+                                </div>
+                                <span className="w-fit border border-red-900 bg-red-950/40 px-3 py-1 text-xs uppercase text-red-100">
+                                  This package is not an execution command.
+                                </span>
+                              </div>
+
+                              <div className="mt-4 border border-amber-900 bg-amber-950/30 p-3 text-sm text-amber-100">
+                                This package is for review only. No file
+                                changes, deploy, publish, merge, push, Ads
+                                changes, or GA4 changes are authorized.
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  copyTextToClipboard(
+                                    buildImplementationPackageMarkdown(
+                                      selectedOpportunity,
+                                      implementationPlan,
+                                      implementationDraft,
+                                    ),
+                                    "Implementation package copied.",
+                                  )
+                                }
+                                className="mt-4 border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-700"
+                              >
+                                Copy implementation package
+                              </button>
+
+                              <dl className="mt-4 grid gap-3 text-sm text-neutral-300 md:grid-cols-2">
+                                <div>
+                                  <dt className="text-xs uppercase text-neutral-500">
+                                    Source opportunity
+                                  </dt>
+                                  <dd className="mt-1 text-neutral-200">
+                                    {selectedOpportunity?.type ||
+                                      selectedOpportunity?.action_type ||
+                                      "None"}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs uppercase text-neutral-500">
+                                    Implementation plan ID
+                                  </dt>
+                                  <dd className="mt-1 text-neutral-200">
+                                    {implementationPlan.opportunity_id ||
+                                      implementationDraft.source_plan_id ||
+                                      "None"}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs uppercase text-neutral-500">
+                                    Implementation draft ID
+                                  </dt>
+                                  <dd className="mt-1 text-neutral-200">
+                                    {implementationDraft.draft_id || "None"}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs uppercase text-neutral-500">
+                                    Proposed route/path
+                                  </dt>
+                                  <dd className="mt-1 text-neutral-200">
+                                    {String(
+                                      implementationDraft
+                                        .proposed_route_structure?.route_path ||
+                                        implementationDraft
+                                          .proposed_route_structure?.slug ||
+                                        "None",
+                                    )}
+                                  </dd>
+                                </div>
+                              </dl>
+
+                              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                <div>
+                                  <h5 className="text-xs uppercase text-neutral-500">
+                                    Proposed file list
+                                  </h5>
+                                  <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                    {compactJson(
+                                      implementationDraft.proposed_files,
+                                    )}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <h5 className="text-xs uppercase text-neutral-500">
+                                    SEO metadata
+                                  </h5>
+                                  <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                    {compactJson(
+                                      implementationDraft.proposed_seo_metadata,
+                                    )}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <h5 className="text-xs uppercase text-neutral-500">
+                                    Content blocks summary
+                                  </h5>
+                                  <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                    {compactJson(
+                                      implementationDraft.proposed_content_blocks,
+                                    )}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <h5 className="text-xs uppercase text-neutral-500">
+                                    Schema summary
+                                  </h5>
+                                  <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                    {compactJson(
+                                      implementationDraft.proposed_schema_jsonld,
+                                    )}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <h5 className="text-xs uppercase text-neutral-500">
+                                    Validation plan
+                                  </h5>
+                                  <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                    {compactJson(
+                                      implementationDraft
+                                        .proposed_validation_plan,
+                                    )}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <h5 className="text-xs uppercase text-neutral-500">
+                                    Blocked actions
+                                  </h5>
+                                  {textList(implementationDraft.blocked_actions)}
+                                </div>
+                                <div className="md:col-span-2">
+                                  <h5 className="text-xs uppercase text-neutral-500">
+                                    Required final approvals
+                                  </h5>
+                                  {textList(implementationDraft.approval_gates)}
+                                </div>
                               </div>
                             </section>
                           </div>
