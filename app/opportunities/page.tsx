@@ -79,6 +79,25 @@ type ImplementationPlan = {
   read_only_guarantees?: string[];
 };
 
+type ImplementationDraft = {
+  ok?: boolean;
+  error?: string;
+  draft_id?: string;
+  source_plan_id?: string;
+  approval_summary?: Record<string, unknown>;
+  proposed_files?: Array<Record<string, unknown>>;
+  proposed_route_structure?: Record<string, unknown>;
+  proposed_content_blocks?: Array<Record<string, unknown>>;
+  proposed_seo_metadata?: Record<string, unknown>;
+  proposed_schema_jsonld?: Record<string, unknown>;
+  proposed_internal_links?: Array<Record<string, unknown>>;
+  proposed_validation_plan?: Array<Record<string, unknown>>;
+  risks?: Array<Record<string, unknown>>;
+  blocked_actions?: string[];
+  approval_gates?: string[];
+  read_only_guarantees?: string[];
+};
+
 type ChecklistKey =
   | "planReviewed"
   | "seoReviewed"
@@ -336,6 +355,54 @@ function buildHandoffBriefMarkdown(
   ].join("\n");
 }
 
+function buildImplementationDraftMarkdown(draft: ImplementationDraft) {
+  return [
+    "# Implementation Draft",
+    "",
+    "Draft only - no file changes, deploy, publish, Ads changes, GA4 changes, merge, or push authorized.",
+    "",
+    "## Draft IDs",
+    `- Draft ID: ${draft.draft_id || "None"}`,
+    `- Source plan ID: ${draft.source_plan_id || "None"}`,
+    "",
+    "## Approval Summary",
+    markdownValue(draft.approval_summary),
+    "",
+    "## Proposed Files",
+    markdownValue(draft.proposed_files),
+    "",
+    "## Proposed Route Structure",
+    markdownValue(draft.proposed_route_structure),
+    "",
+    "## Proposed Content Blocks",
+    markdownValue(draft.proposed_content_blocks),
+    "",
+    "## Proposed SEO Metadata",
+    markdownValue(draft.proposed_seo_metadata),
+    "",
+    "## Proposed Schema JSON-LD",
+    markdownValue(draft.proposed_schema_jsonld),
+    "",
+    "## Proposed Internal Links",
+    markdownValue(draft.proposed_internal_links),
+    "",
+    "## Proposed Validation Plan",
+    markdownValue(draft.proposed_validation_plan),
+    "",
+    "## Risks",
+    markdownValue(draft.risks),
+    "",
+    "## Blocked Actions",
+    markdownValue(draft.blocked_actions),
+    "",
+    "## Approval Gates",
+    markdownValue(draft.approval_gates),
+    "",
+    "## Read-only Guarantees",
+    markdownValue(draft.read_only_guarantees),
+  ].join("\n");
+}
+
 function textList(items?: string[]) {
   if (!items?.length) {
     return <p className="text-sm text-neutral-400">None</p>;
@@ -377,6 +444,12 @@ export default function OpportunitiesPage() {
     EMPTY_REVIEW_CHECKLIST,
   );
   const [approvalTimestamp, setApprovalTimestamp] = useState<string | null>(null);
+  const [implementationDraft, setImplementationDraft] =
+    useState<ImplementationDraft | null>(null);
+  const [implementationDraftError, setImplementationDraftError] = useState<
+    string | null
+  >(null);
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
 
   const missingReviewItems = missingChecklistItems(reviewChecklist);
   const isReviewComplete = missingReviewItems.length === 0;
@@ -420,6 +493,9 @@ export default function OpportunitiesPage() {
     setCopyStatus(null);
     setCopyError(null);
     setApprovalTimestamp(null);
+    setImplementationDraft(null);
+    setImplementationDraftError(null);
+    setIsGeneratingDraft(false);
 
     try {
       let parsedSampleSignals: unknown;
@@ -473,6 +549,9 @@ export default function OpportunitiesPage() {
     setCopyError(null);
     setApprovalTimestamp(null);
     setReviewChecklist(EMPTY_REVIEW_CHECKLIST);
+    setImplementationDraft(null);
+    setImplementationDraftError(null);
+    setIsGeneratingDraft(false);
 
     try {
       const response = await fetch(
@@ -523,6 +602,8 @@ export default function OpportunitiesPage() {
       [key]: !current[key],
     }));
     setApprovalTimestamp(null);
+    setImplementationDraft(null);
+    setImplementationDraftError(null);
   }
 
   function approveForNextPlanningStep() {
@@ -530,6 +611,56 @@ export default function OpportunitiesPage() {
     setApprovalTimestamp(new Date().toLocaleString());
     setCopyStatus(null);
     setCopyError(null);
+    setImplementationDraft(null);
+    setImplementationDraftError(null);
+  }
+
+  async function generateImplementationDraft() {
+    if (!implementationPlan || !approvalTimestamp) return;
+    setIsGeneratingDraft(true);
+    setImplementationDraft(null);
+    setImplementationDraftError(null);
+    setCopyStatus(null);
+    setCopyError(null);
+
+    const handoffBrief = buildHandoffBriefMarkdown(
+      selectedOpportunity,
+      implementationPlan,
+      reviewChecklist,
+      approvalTimestamp,
+    );
+
+    try {
+      const response = await fetch(
+        backendUrl("/api/opportunities/landing-pages/implementation-draft"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            selected_opportunity: selectedOpportunity,
+            implementation_plan: implementationPlan,
+            handoff_brief: handoffBrief,
+            approval_timestamp: approvalTimestamp,
+            checklist_status: reviewChecklist,
+          }),
+        },
+      );
+      const data = (await response.json().catch(() => null)) as
+        | ImplementationDraft
+        | null;
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Implementation draft failed.");
+      }
+
+      setImplementationDraft(data);
+    } catch (err) {
+      setImplementationDraftError(
+        err instanceof Error ? err.message : "Implementation draft failed.",
+      );
+    } finally {
+      setIsGeneratingDraft(false);
+    }
   }
 
   return (
@@ -1046,6 +1177,205 @@ export default function OpportunitiesPage() {
                             state.
                           </p>
                         )}
+                      </section>
+
+                      <section className="border border-neutral-800 bg-neutral-950 p-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium">
+                              Implementation draft
+                            </h3>
+                            <p className="mt-1 text-sm text-neutral-400">
+                              Draft only - no file changes, deploy, publish,
+                              Ads, GA4, merge, or push authorized.
+                            </p>
+                          </div>
+                          <span className="w-fit border border-amber-800 bg-amber-950/40 px-3 py-1 text-xs uppercase text-amber-100">
+                            Read-only draft
+                          </span>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={generateImplementationDraft}
+                            disabled={!approvalTimestamp || isGeneratingDraft}
+                            className="border border-neutral-700 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                          >
+                            {isGeneratingDraft
+                              ? "Generating draft..."
+                              : "Generate implementation draft"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              implementationDraft
+                                ? copyTextToClipboard(
+                                    buildImplementationDraftMarkdown(
+                                      implementationDraft,
+                                    ),
+                                    "Implementation draft copied as Markdown.",
+                                  )
+                                : undefined
+                            }
+                            disabled={!implementationDraft}
+                            className="border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Copy implementation draft as Markdown
+                          </button>
+                        </div>
+
+                        {!approvalTimestamp ? (
+                          <p className="mt-3 text-sm text-neutral-400">
+                            Local approval for the next planning step is
+                            required before a draft can be requested.
+                          </p>
+                        ) : null}
+
+                        {implementationDraftError ? (
+                          <div className="mt-3 border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+                            {implementationDraftError}
+                          </div>
+                        ) : null}
+
+                        {implementationDraft ? (
+                          <div className="mt-4 flex flex-col gap-4">
+                            <section className="border border-neutral-800 bg-neutral-900 p-4">
+                              <h4 className="text-sm font-medium">
+                                Draft id / source plan id
+                              </h4>
+                              <dl className="mt-3 grid gap-2 text-sm text-neutral-300 md:grid-cols-2">
+                                <div>
+                                  draft_id: {implementationDraft.draft_id || "None"}
+                                </div>
+                                <div>
+                                  source_plan_id:{" "}
+                                  {implementationDraft.source_plan_id || "None"}
+                                </div>
+                              </dl>
+                            </section>
+
+                            <section className="border border-neutral-800 bg-neutral-900 p-4">
+                              <h4 className="text-sm font-medium">
+                                Approval summary
+                              </h4>
+                              <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                {compactJson(
+                                  implementationDraft.approval_summary,
+                                )}
+                              </pre>
+                            </section>
+
+                            <section className="border border-neutral-800 bg-neutral-900 p-4">
+                              <h4 className="text-sm font-medium">
+                                Proposed files
+                              </h4>
+                              <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                {compactJson(implementationDraft.proposed_files)}
+                              </pre>
+                            </section>
+
+                            <section className="grid gap-4 md:grid-cols-2">
+                              <div className="border border-neutral-800 bg-neutral-900 p-4">
+                                <h4 className="text-sm font-medium">
+                                  Proposed route structure
+                                </h4>
+                                <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                  {compactJson(
+                                    implementationDraft.proposed_route_structure,
+                                  )}
+                                </pre>
+                              </div>
+                              <div className="border border-neutral-800 bg-neutral-900 p-4">
+                                <h4 className="text-sm font-medium">
+                                  Proposed SEO metadata
+                                </h4>
+                                <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                  {compactJson(
+                                    implementationDraft.proposed_seo_metadata,
+                                  )}
+                                </pre>
+                              </div>
+                            </section>
+
+                            <section className="border border-neutral-800 bg-neutral-900 p-4">
+                              <h4 className="text-sm font-medium">
+                                Proposed content blocks
+                              </h4>
+                              <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                {compactJson(
+                                  implementationDraft.proposed_content_blocks,
+                                )}
+                              </pre>
+                            </section>
+
+                            <section className="border border-neutral-800 bg-neutral-900 p-4">
+                              <h4 className="text-sm font-medium">
+                                Proposed schema JSON-LD
+                              </h4>
+                              <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                {compactJson(
+                                  implementationDraft.proposed_schema_jsonld,
+                                )}
+                              </pre>
+                            </section>
+
+                            <section className="grid gap-4 md:grid-cols-2">
+                              <div className="border border-neutral-800 bg-neutral-900 p-4">
+                                <h4 className="text-sm font-medium">
+                                  Proposed internal links
+                                </h4>
+                                <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                  {compactJson(
+                                    implementationDraft.proposed_internal_links,
+                                  )}
+                                </pre>
+                              </div>
+                              <div className="border border-neutral-800 bg-neutral-900 p-4">
+                                <h4 className="text-sm font-medium">
+                                  Proposed validation plan
+                                </h4>
+                                <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                  {compactJson(
+                                    implementationDraft.proposed_validation_plan,
+                                  )}
+                                </pre>
+                              </div>
+                            </section>
+
+                            <section className="grid gap-4 md:grid-cols-2">
+                              <div className="border border-neutral-800 bg-neutral-900 p-4">
+                                <h4 className="text-sm font-medium">Risks</h4>
+                                <pre className="mt-2 overflow-auto bg-neutral-950 p-3 text-xs text-neutral-300">
+                                  {compactJson(implementationDraft.risks)}
+                                </pre>
+                              </div>
+                              <div className="border border-neutral-800 bg-neutral-900 p-4">
+                                <h4 className="text-sm font-medium">
+                                  Blocked actions
+                                </h4>
+                                {textList(implementationDraft.blocked_actions)}
+                              </div>
+                            </section>
+
+                            <section className="grid gap-4 md:grid-cols-2">
+                              <div className="border border-neutral-800 bg-neutral-900 p-4">
+                                <h4 className="text-sm font-medium">
+                                  Approval gates
+                                </h4>
+                                {textList(implementationDraft.approval_gates)}
+                              </div>
+                              <div className="border border-neutral-800 bg-neutral-900 p-4">
+                                <h4 className="text-sm font-medium">
+                                  Read-only guarantees
+                                </h4>
+                                {textList(
+                                  implementationDraft.read_only_guarantees,
+                                )}
+                              </div>
+                            </section>
+                          </div>
+                        ) : null}
                       </section>
 
                       <section className="border border-neutral-800 bg-neutral-950 p-4">
