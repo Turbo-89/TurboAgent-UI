@@ -90,6 +90,29 @@ type ChecklistKey =
 
 type ReviewChecklist = Record<ChecklistKey, boolean>;
 
+const CHECKLIST_ITEMS: Array<{ key: ChecklistKey; label: string }> = [
+  { key: "planReviewed", label: "Plan reviewed" },
+  { key: "seoReviewed", label: "SEO metadata reviewed" },
+  { key: "contentReviewed", label: "Content outline reviewed" },
+  { key: "schemaReviewed", label: "Schema plan reviewed" },
+  { key: "linksReviewed", label: "Internal links reviewed" },
+  { key: "risksReviewed", label: "Risks reviewed" },
+  {
+    key: "approvalStillRequired",
+    label: "Explicit approval still required before implementation",
+  },
+];
+
+const EMPTY_REVIEW_CHECKLIST: ReviewChecklist = {
+  planReviewed: false,
+  seoReviewed: false,
+  contentReviewed: false,
+  schemaReviewed: false,
+  linksReviewed: false,
+  risksReviewed: false,
+  approvalStillRequired: false,
+};
+
 const SAMPLE_SIGNALS = JSON.stringify(
   [
     {
@@ -266,6 +289,53 @@ function buildApprovalChecklistMarkdown(
   ].join("\n");
 }
 
+function checklistMarkdown(checklist: ReviewChecklist) {
+  return CHECKLIST_ITEMS.map(
+    (item) => `- [${checklist[item.key] ? "x" : " "}] ${item.label}`,
+  ).join("\n");
+}
+
+function missingChecklistItems(checklist: ReviewChecklist) {
+  return CHECKLIST_ITEMS.filter((item) => !checklist[item.key]);
+}
+
+function buildHandoffBriefMarkdown(
+  opportunity: Opportunity | null,
+  plan: ImplementationPlan,
+  checklist: ReviewChecklist,
+  approvalTimestamp: string,
+) {
+  return [
+    "# Implementation Plan Handoff Brief",
+    "",
+    "Planning review only. This handoff is not approval for file changes, deploy, publish, Ads changes, GA4 changes, merge, or push.",
+    "",
+    "## Selected Opportunity",
+    `- Type: ${opportunity?.type || opportunity?.action_type || "None"}`,
+    `- Service: ${plan.service_label || opportunityServiceLabel(opportunity)}`,
+    `- Service intent: ${plan.service_intent?.canonical_service || opportunity?.service_intent?.canonical_service || "None"}`,
+    `- Region: ${plan.region || opportunity?.region || "None"}`,
+    `- Score: ${opportunity?.score ?? "None"}`,
+    `- Reason: ${opportunity?.reason || "None"}`,
+    "",
+    "## Implementation Plan",
+    `- Plan ID: ${plan.opportunity_id || "None"}`,
+    `- Proposed slug: ${plan.proposed_slug || "None"}`,
+    `- Proposed path: ${plan.proposed_url_path || "None"}`,
+    "",
+    "## Checklist Status",
+    checklistMarkdown(checklist),
+    "",
+    "## Planning Approval",
+    `- Approval timestamp: ${approvalTimestamp || "Not approved"}`,
+    "- Status: Approved for next planning step only - no implementation authorized.",
+    "- Next allowed step: prepare implementation draft only.",
+    "",
+    "## Explicit Non-Authorization",
+    "This is not approval for file changes, deploy, publish, Ads changes, GA4 changes, merge, or push.",
+  ].join("\n");
+}
+
 function textList(items?: string[]) {
   if (!items?.length) {
     return <p className="text-sm text-neutral-400">None</p>;
@@ -303,15 +373,13 @@ export default function OpportunitiesPage() {
     useState<Opportunity | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
-  const [reviewChecklist, setReviewChecklist] = useState<ReviewChecklist>({
-    planReviewed: false,
-    seoReviewed: false,
-    contentReviewed: false,
-    schemaReviewed: false,
-    linksReviewed: false,
-    risksReviewed: false,
-    approvalStillRequired: false,
-  });
+  const [reviewChecklist, setReviewChecklist] = useState<ReviewChecklist>(
+    EMPTY_REVIEW_CHECKLIST,
+  );
+  const [approvalTimestamp, setApprovalTimestamp] = useState<string | null>(null);
+
+  const missingReviewItems = missingChecklistItems(reviewChecklist);
+  const isReviewComplete = missingReviewItems.length === 0;
 
   useEffect(() => {
     async function loadStatus() {
@@ -351,6 +419,7 @@ export default function OpportunitiesPage() {
     setSelectedOpportunity(null);
     setCopyStatus(null);
     setCopyError(null);
+    setApprovalTimestamp(null);
 
     try {
       let parsedSampleSignals: unknown;
@@ -402,15 +471,8 @@ export default function OpportunitiesPage() {
     setSelectedOpportunity(opportunity);
     setCopyStatus(null);
     setCopyError(null);
-    setReviewChecklist({
-      planReviewed: false,
-      seoReviewed: false,
-      contentReviewed: false,
-      schemaReviewed: false,
-      linksReviewed: false,
-      risksReviewed: false,
-      approvalStillRequired: false,
-    });
+    setApprovalTimestamp(null);
+    setReviewChecklist(EMPTY_REVIEW_CHECKLIST);
 
     try {
       const response = await fetch(
@@ -460,6 +522,14 @@ export default function OpportunitiesPage() {
       ...current,
       [key]: !current[key],
     }));
+    setApprovalTimestamp(null);
+  }
+
+  function approveForNextPlanningStep() {
+    if (!isReviewComplete) return;
+    setApprovalTimestamp(new Date().toLocaleString());
+    setCopyStatus(null);
+    setCopyError(null);
   }
 
   return (
@@ -887,34 +957,95 @@ export default function OpportunitiesPage() {
                           Planning review checklist
                         </h3>
                         <div className="mt-3 grid gap-2 text-sm text-neutral-200 md:grid-cols-2">
-                          {[
-                            ["planReviewed", "Plan reviewed"],
-                            ["seoReviewed", "SEO metadata reviewed"],
-                            ["contentReviewed", "Content outline reviewed"],
-                            ["schemaReviewed", "Schema plan reviewed"],
-                            ["linksReviewed", "Internal links reviewed"],
-                            ["risksReviewed", "Risks reviewed"],
-                            [
-                              "approvalStillRequired",
-                              "Explicit approval still required before implementation",
-                            ],
-                          ].map(([key, label]) => (
+                          {CHECKLIST_ITEMS.map((item) => (
                             <label
-                              key={key}
+                              key={item.key}
                               className="flex items-center gap-2"
                             >
                               <input
                                 type="checkbox"
-                                checked={reviewChecklist[key as ChecklistKey]}
-                                onChange={() =>
-                                  toggleChecklistItem(key as ChecklistKey)
-                                }
+                                checked={reviewChecklist[item.key]}
+                                onChange={() => toggleChecklistItem(item.key)}
                                 className="h-4 w-4"
                               />
-                              {label}
+                              {item.label}
                             </label>
                           ))}
                         </div>
+                      </section>
+
+                      <section className="border border-neutral-800 bg-neutral-950 p-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium">
+                              Approval-state handoff
+                            </h3>
+                            <p className="mt-1 text-sm text-neutral-400">
+                              Local planning approval only. No implementation,
+                              file changes, deploy, publish, merge, push, Ads,
+                              or GA4 action is authorized.
+                            </p>
+                          </div>
+                          <span className="w-fit border border-amber-800 bg-amber-950/40 px-3 py-1 text-xs uppercase text-amber-100">
+                            Read-only local state
+                          </span>
+                        </div>
+
+                        {!isReviewComplete ? (
+                          <div className="mt-4 border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-300">
+                            <div className="font-medium text-neutral-100">
+                              Missing checklist items
+                            </div>
+                            <ul className="mt-2 list-disc space-y-1 pl-5">
+                              {missingReviewItems.map((item) => (
+                                <li key={item.key}>{item.label}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={approveForNextPlanningStep}
+                            disabled={!isReviewComplete}
+                            className="border border-neutral-700 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                          >
+                            Approve for next planning step
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyTextToClipboard(
+                                buildHandoffBriefMarkdown(
+                                  selectedOpportunity,
+                                  implementationPlan,
+                                  reviewChecklist,
+                                  approvalTimestamp || "Not approved",
+                                ),
+                                "Handoff brief copied.",
+                              )
+                            }
+                            className="border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-700"
+                          >
+                            Copy handoff brief
+                          </button>
+                        </div>
+
+                        {approvalTimestamp ? (
+                          <div className="mt-4 border border-emerald-900 bg-emerald-950/30 p-3 text-sm text-emerald-100">
+                            Approved for next planning step only - no
+                            implementation authorized.
+                            <div className="mt-1 text-emerald-200">
+                              Approval timestamp: {approvalTimestamp}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-4 text-sm text-neutral-400">
+                            No planning approval recorded in this local UI
+                            state.
+                          </p>
+                        )}
                       </section>
 
                       <section className="border border-neutral-800 bg-neutral-950 p-4">
