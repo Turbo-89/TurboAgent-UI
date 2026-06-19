@@ -147,12 +147,41 @@ function booleanLabel(value: boolean | undefined): string {
   return "unknown";
 }
 
+function formatTimestamp(date: Date): string {
+  return date.toLocaleString();
+}
+
 function StatusCard({ label, value }: { label: string; value: string }) {
   return (
     <article className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-4">
       <p className="text-xs uppercase tracking-wide text-neutral-500">{label}</p>
       <p className="mt-2 text-sm font-medium text-neutral-100">{value}</p>
     </article>
+  );
+}
+
+function StatusIndicator({
+  tone,
+  label,
+}: {
+  tone: "ready" | "loading" | "error" | "fallback";
+  label: string;
+}) {
+  const className =
+    tone === "ready"
+      ? "border-emerald-800 bg-emerald-950/40 text-emerald-100"
+      : tone === "loading"
+        ? "border-sky-800 bg-sky-950/40 text-sky-100"
+        : tone === "error"
+          ? "border-red-800 bg-red-950/40 text-red-100"
+          : "border-amber-800 bg-amber-950/40 text-amber-100";
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${className}`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -215,6 +244,8 @@ export default function AgentCockpitPage() {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lastRefreshed, setLastRefreshed] = useState("");
+  const [lastRefreshFailed, setLastRefreshFailed] = useState("");
 
   const loadReadiness = useCallback(async () => {
     setLoading(true);
@@ -234,8 +265,10 @@ export default function AgentCockpitPage() {
       }
 
       setReadiness(data);
+      setLastRefreshed(formatTimestamp(new Date()));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch readiness.");
+      setLastRefreshFailed(formatTimestamp(new Date()));
     } finally {
       setLoading(false);
     }
@@ -259,6 +292,7 @@ export default function AgentCockpitPage() {
         ["Deploy/publish access", readiness.deploy_publish_access || "unknown"],
       ]
     : [];
+  const usingStaticFallback = Boolean(error || !readiness);
 
   return (
     <main className="min-h-screen bg-neutral-950 p-6 text-neutral-100">
@@ -307,6 +341,55 @@ export default function AgentCockpitPage() {
             >
               {loading ? "Refreshing..." : "Refresh readiness"}
             </button>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {loading ? (
+              <StatusIndicator tone="loading" label="loading" />
+            ) : error ? (
+              <StatusIndicator tone="error" label="backend offline/error" />
+            ) : readiness ? (
+              <StatusIndicator tone="ready" label="backend online" />
+            ) : null}
+            {usingStaticFallback ? (
+              <StatusIndicator tone="fallback" label="using static fallback context" />
+            ) : (
+              <StatusIndicator tone="fallback" label="static fallback available" />
+            )}
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <article className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-4">
+              <h3 className="text-sm font-semibold">Backend source</h3>
+              <p className="mt-3 text-sm text-neutral-300">
+                Live data: GET /api/agent-cockpit/readiness
+              </p>
+              <p className="mt-1 text-sm text-neutral-300">
+                Fallback: static local cockpit content
+              </p>
+              {lastRefreshed ? (
+                <p className="mt-3 text-xs text-emerald-300">
+                  Last refreshed: {lastRefreshed}
+                </p>
+              ) : null}
+              {lastRefreshFailed ? (
+                <p className="mt-1 text-xs text-red-300">
+                  Last refresh failed: {lastRefreshFailed}
+                </p>
+              ) : null}
+            </article>
+
+            <article className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-4">
+              <h3 className="text-sm font-semibold">Operator interpretation</h3>
+              <ul className="mt-3 space-y-2 text-sm text-neutral-300">
+                <li>Green/ready means read-only planning workflow is available.</li>
+                <li>
+                  Offline/error means cockpit fallback remains available, but
+                  live backend readiness is unavailable.
+                </li>
+                <li>Execution is still blocked in all cases.</li>
+              </ul>
+            </article>
           </div>
 
           {loading ? (
