@@ -98,6 +98,29 @@ type ImplementationDraft = {
   read_only_guarantees?: string[];
 };
 
+type FinalImplementationReview = {
+  ok?: boolean;
+  error?: string;
+  review_id?: string;
+  source_draft_id?: string;
+  readiness_status?: string;
+  readiness_score?: number;
+  required_missing_items?: string[];
+  implementation_summary?: Record<string, unknown>;
+  proposed_files_review?: Array<Record<string, unknown>>;
+  seo_review?: Record<string, unknown>;
+  content_review?: Record<string, unknown>;
+  schema_review?: Record<string, unknown>;
+  internal_link_review?: Record<string, unknown>;
+  validation_review?: Record<string, unknown>;
+  risk_review?: Record<string, unknown>;
+  final_approval_required?: boolean;
+  blocked_actions?: string[];
+  approval_gates?: string[];
+  read_only_guarantees?: string[];
+  next_allowed_step?: string;
+};
+
 type ChecklistKey =
   | "planReviewed"
   | "seoReviewed"
@@ -458,6 +481,64 @@ function buildImplementationPackageMarkdown(
   ].join("\n");
 }
 
+function buildFinalReviewMarkdown(review: FinalImplementationReview) {
+  return [
+    "# Final Implementation Review",
+    "",
+    "Final review only - this does not authorize file changes, deploy, publish, Ads changes, GA4 changes, merge, or push.",
+    "",
+    "## Review IDs",
+    `- Review ID: ${review.review_id || "None"}`,
+    `- Source draft ID: ${review.source_draft_id || "None"}`,
+    "",
+    "## Readiness",
+    `- Status: ${review.readiness_status || "None"}`,
+    `- Score: ${review.readiness_score ?? "None"}`,
+    "",
+    "## Required Missing Items",
+    markdownValue(review.required_missing_items),
+    "",
+    "## Implementation Summary",
+    markdownValue(review.implementation_summary),
+    "",
+    "## Proposed Files Review",
+    markdownValue(review.proposed_files_review),
+    "",
+    "## SEO Review",
+    markdownValue(review.seo_review),
+    "",
+    "## Content Review",
+    markdownValue(review.content_review),
+    "",
+    "## Schema Review",
+    markdownValue(review.schema_review),
+    "",
+    "## Internal Link Review",
+    markdownValue(review.internal_link_review),
+    "",
+    "## Validation Review",
+    markdownValue(review.validation_review),
+    "",
+    "## Risk Review",
+    markdownValue(review.risk_review),
+    "",
+    "## Final Approval Required",
+    String(review.final_approval_required ?? "None"),
+    "",
+    "## Blocked Actions",
+    markdownValue(review.blocked_actions),
+    "",
+    "## Approval Gates",
+    markdownValue(review.approval_gates),
+    "",
+    "## Read-only Guarantees",
+    markdownValue(review.read_only_guarantees),
+    "",
+    "## Next Allowed Step",
+    review.next_allowed_step || "None",
+  ].join("\n");
+}
+
 function textList(items?: string[]) {
   if (!items?.length) {
     return <p className="text-sm text-neutral-400">None</p>;
@@ -505,6 +586,10 @@ export default function OpportunitiesPage() {
     string | null
   >(null);
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [finalReview, setFinalReview] =
+    useState<FinalImplementationReview | null>(null);
+  const [finalReviewError, setFinalReviewError] = useState<string | null>(null);
+  const [isRunningFinalReview, setIsRunningFinalReview] = useState(false);
 
   const missingReviewItems = missingChecklistItems(reviewChecklist);
   const isReviewComplete = missingReviewItems.length === 0;
@@ -551,6 +636,9 @@ export default function OpportunitiesPage() {
     setImplementationDraft(null);
     setImplementationDraftError(null);
     setIsGeneratingDraft(false);
+    setFinalReview(null);
+    setFinalReviewError(null);
+    setIsRunningFinalReview(false);
 
     try {
       let parsedSampleSignals: unknown;
@@ -607,6 +695,9 @@ export default function OpportunitiesPage() {
     setImplementationDraft(null);
     setImplementationDraftError(null);
     setIsGeneratingDraft(false);
+    setFinalReview(null);
+    setFinalReviewError(null);
+    setIsRunningFinalReview(false);
 
     try {
       const response = await fetch(
@@ -659,6 +750,8 @@ export default function OpportunitiesPage() {
     setApprovalTimestamp(null);
     setImplementationDraft(null);
     setImplementationDraftError(null);
+    setFinalReview(null);
+    setFinalReviewError(null);
   }
 
   function approveForNextPlanningStep() {
@@ -668,6 +761,8 @@ export default function OpportunitiesPage() {
     setCopyError(null);
     setImplementationDraft(null);
     setImplementationDraftError(null);
+    setFinalReview(null);
+    setFinalReviewError(null);
   }
 
   async function generateImplementationDraft() {
@@ -675,6 +770,8 @@ export default function OpportunitiesPage() {
     setIsGeneratingDraft(true);
     setImplementationDraft(null);
     setImplementationDraftError(null);
+    setFinalReview(null);
+    setFinalReviewError(null);
     setCopyStatus(null);
     setCopyError(null);
 
@@ -715,6 +812,56 @@ export default function OpportunitiesPage() {
       );
     } finally {
       setIsGeneratingDraft(false);
+    }
+  }
+
+  async function runFinalImplementationReview() {
+    if (!implementationPlan || !implementationDraft) return;
+    setIsRunningFinalReview(true);
+    setFinalReview(null);
+    setFinalReviewError(null);
+    setCopyStatus(null);
+    setCopyError(null);
+
+    const implementationPackage = buildImplementationPackageMarkdown(
+      selectedOpportunity,
+      implementationPlan,
+      implementationDraft,
+    );
+
+    try {
+      const response = await fetch(
+        backendUrl("/api/opportunities/landing-pages/final-implementation-review"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            selected_opportunity: selectedOpportunity,
+            implementation_plan: implementationPlan,
+            implementation_draft: implementationDraft,
+            implementation_package: implementationPackage,
+            approval_timestamp: approvalTimestamp,
+            checklist_status: reviewChecklist,
+          }),
+        },
+      );
+      const data = (await response.json().catch(() => null)) as
+        | FinalImplementationReview
+        | null;
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Final implementation review failed.");
+      }
+
+      setFinalReview(data);
+    } catch (err) {
+      setFinalReviewError(
+        err instanceof Error
+          ? err.message
+          : "Final implementation review failed.",
+      );
+    } finally {
+      setIsRunningFinalReview(false);
     }
   }
 
@@ -1579,6 +1726,231 @@ export default function OpportunitiesPage() {
                                   {textList(implementationDraft.approval_gates)}
                                 </div>
                               </div>
+                            </section>
+
+                            <section className="border border-neutral-800 bg-neutral-900 p-4">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                  <h4 className="text-sm font-medium">
+                                    Final implementation review
+                                  </h4>
+                                  <p className="mt-1 text-sm text-neutral-400">
+                                    Final review only - this does not authorize
+                                    file changes, deploy, publish, Ads, GA4,
+                                    merge, or push.
+                                  </p>
+                                </div>
+                                <span className="w-fit border border-amber-800 bg-amber-950/40 px-3 py-1 text-xs uppercase text-amber-100">
+                                  Read-only final review
+                                </span>
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={runFinalImplementationReview}
+                                  disabled={
+                                    !implementationDraft || isRunningFinalReview
+                                  }
+                                  className="border border-neutral-700 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                                >
+                                  {isRunningFinalReview
+                                    ? "Running final review..."
+                                    : "Run final implementation review"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    finalReview
+                                      ? copyTextToClipboard(
+                                          buildFinalReviewMarkdown(finalReview),
+                                          "Final review copied as Markdown.",
+                                        )
+                                      : undefined
+                                  }
+                                  disabled={!finalReview}
+                                  className="border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Copy final review as Markdown
+                                </button>
+                              </div>
+
+                              {finalReviewError ? (
+                                <div className="mt-3 border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+                                  {finalReviewError}
+                                </div>
+                              ) : null}
+
+                              {finalReview ? (
+                                <div className="mt-4 flex flex-col gap-4">
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <h5 className="text-sm font-medium">
+                                      Review id / source draft id
+                                    </h5>
+                                    <dl className="mt-3 grid gap-2 text-sm text-neutral-300 md:grid-cols-2">
+                                      <div>
+                                        review_id:{" "}
+                                        {finalReview.review_id || "None"}
+                                      </div>
+                                      <div>
+                                        source_draft_id:{" "}
+                                        {finalReview.source_draft_id || "None"}
+                                      </div>
+                                    </dl>
+                                  </section>
+
+                                  <section className="grid gap-4 md:grid-cols-2">
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Readiness status
+                                      </h5>
+                                      <p className="mt-2 text-sm text-neutral-200">
+                                        {finalReview.readiness_status || "None"}
+                                      </p>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Readiness score
+                                      </h5>
+                                      <p className="mt-2 text-sm text-neutral-200">
+                                        {finalReview.readiness_score ?? "None"}
+                                      </p>
+                                    </div>
+                                  </section>
+
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <h5 className="text-sm font-medium">
+                                      Required missing items
+                                    </h5>
+                                    {textList(
+                                      finalReview.required_missing_items,
+                                    )}
+                                  </section>
+
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <h5 className="text-sm font-medium">
+                                      Implementation summary
+                                    </h5>
+                                    <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                      {compactJson(
+                                        finalReview.implementation_summary,
+                                      )}
+                                    </pre>
+                                  </section>
+
+                                  <section className="border border-neutral-800 bg-neutral-950 p-4">
+                                    <h5 className="text-sm font-medium">
+                                      Proposed files review
+                                    </h5>
+                                    <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                      {compactJson(
+                                        finalReview.proposed_files_review,
+                                      )}
+                                    </pre>
+                                  </section>
+
+                                  <section className="grid gap-4 md:grid-cols-2">
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        SEO review
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(finalReview.seo_review)}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Content review
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          finalReview.content_review,
+                                        )}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Schema review
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(finalReview.schema_review)}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Internal link review
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          finalReview.internal_link_review,
+                                        )}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Validation review
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(
+                                          finalReview.validation_review,
+                                        )}
+                                      </pre>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Risk review
+                                      </h5>
+                                      <pre className="mt-2 overflow-auto bg-neutral-900 p-3 text-xs text-neutral-300">
+                                        {compactJson(finalReview.risk_review)}
+                                      </pre>
+                                    </div>
+                                  </section>
+
+                                  <section className="grid gap-4 md:grid-cols-2">
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Final approval required
+                                      </h5>
+                                      <p className="mt-2 text-sm text-neutral-200">
+                                        {String(
+                                          finalReview.final_approval_required,
+                                        )}
+                                      </p>
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Next allowed step
+                                      </h5>
+                                      <p className="mt-2 text-sm text-neutral-200">
+                                        {finalReview.next_allowed_step || "None"}
+                                      </p>
+                                    </div>
+                                  </section>
+
+                                  <section className="grid gap-4 md:grid-cols-3">
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Blocked actions
+                                      </h5>
+                                      {textList(finalReview.blocked_actions)}
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Approval gates
+                                      </h5>
+                                      {textList(finalReview.approval_gates)}
+                                    </div>
+                                    <div className="border border-neutral-800 bg-neutral-950 p-4">
+                                      <h5 className="text-sm font-medium">
+                                        Read-only guarantees
+                                      </h5>
+                                      {textList(
+                                        finalReview.read_only_guarantees,
+                                      )}
+                                    </div>
+                                  </section>
+                                </div>
+                              ) : null}
                             </section>
                           </div>
                         ) : null}
