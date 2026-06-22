@@ -69,6 +69,30 @@ type AuditEventResult = {
   message?: string;
 };
 
+type ValidationCommand = {
+  command?: string;
+  purpose?: string;
+};
+
+type LocalPreflight = {
+  ok?: boolean;
+  preflight_status?: string;
+  target_repo?: string;
+  read_only?: boolean;
+  git_available?: boolean;
+  repo_exists?: boolean;
+  repo_is_git_repo?: boolean;
+  current_branch?: string;
+  working_tree_status?: string;
+  has_uncommitted_changes?: boolean;
+  package_manager?: string;
+  detected_project_type?: string;
+  available_validation_commands?: ValidationCommand[];
+  blocking_issues?: string[];
+  warnings?: string[];
+  next_allowed_step?: string;
+};
+
 const navigationCards = [
   {
     href: "/opportunities",
@@ -473,6 +497,31 @@ function SampleEvents({ events }: { events?: RunHistoryEvent[] }) {
   );
 }
 
+function ValidationCommands({
+  commands,
+}: {
+  commands?: ValidationCommand[];
+}) {
+  if (!Array.isArray(commands) || !commands.length) {
+    return <p className="text-sm text-neutral-500">No validation commands returned.</p>;
+  }
+
+  return (
+    <ul className="space-y-2 text-sm text-neutral-300">
+      {commands.map((item, index) => (
+        <li key={`${item.command || "command"}-${index}`}>
+          <span className="font-medium text-neutral-100">
+            {item.command || "unknown command"}
+          </span>
+          {item.purpose ? (
+            <span className="text-neutral-500"> - {item.purpose}</span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function AgentCockpitPage() {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [loading, setLoading] = useState(true);
@@ -489,6 +538,11 @@ export default function AgentCockpitPage() {
   const [auditEventError, setAuditEventError] = useState("");
   const [auditEventResult, setAuditEventResult] =
     useState<AuditEventResult | null>(null);
+  const [localPreflight, setLocalPreflight] = useState<LocalPreflight | null>(
+    null,
+  );
+  const [localPreflightLoading, setLocalPreflightLoading] = useState(true);
+  const [localPreflightError, setLocalPreflightError] = useState("");
 
   const loadReadiness = useCallback(async () => {
     setLoading(true);
@@ -546,6 +600,36 @@ export default function AgentCockpitPage() {
     }
   }, []);
 
+  const loadLocalPreflight = useCallback(async () => {
+    setLocalPreflightLoading(true);
+    setLocalPreflightError("");
+
+    try {
+      const response = await fetch(
+        backendUrl("/api/turboservices/local-preflight"),
+        {
+          cache: "no-store",
+        },
+      );
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status}: ${text || response.statusText}`,
+        );
+      }
+
+      setLocalPreflight(data);
+    } catch (err) {
+      setLocalPreflightError(
+        err instanceof Error ? err.message : "Failed to fetch local preflight.",
+      );
+    } finally {
+      setLocalPreflightLoading(false);
+    }
+  }, []);
+
   const recordCockpitAuditEvent = useCallback(async () => {
     setAuditEventLoading(true);
     setAuditEventError("");
@@ -589,7 +673,8 @@ export default function AgentCockpitPage() {
   useEffect(() => {
     loadReadiness();
     loadRunHistory();
-  }, [loadReadiness, loadRunHistory]);
+    loadLocalPreflight();
+  }, [loadReadiness, loadRunHistory, loadLocalPreflight]);
 
   const liveStatusCards = readiness
     ? [
@@ -1167,6 +1252,144 @@ export default function AgentCockpitPage() {
               </p>
             </article>
           </div>
+        </section>
+
+        <section className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-wide text-orange-300">
+                Turboservices local preflight
+              </p>
+              <h2 className="mt-1 text-lg font-semibold">
+                Local implementation readiness
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm text-neutral-400">
+                Preflight is read-only. Local branch creation requires explicit
+                approval.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadLocalPreflight}
+              disabled={localPreflightLoading}
+              className="rounded-md border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-100 transition hover:border-neutral-500 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {localPreflightLoading ? "Refreshing..." : "Refresh preflight"}
+            </button>
+          </div>
+
+          {localPreflightLoading ? (
+            <p className="mt-5 text-sm text-neutral-400">
+              Loading local preflight...
+            </p>
+          ) : null}
+
+          {localPreflightError ? (
+            <div className="mt-5 rounded-lg border border-red-900/70 bg-red-950/20 p-4 text-sm text-red-100">
+              {localPreflightError}
+            </div>
+          ) : null}
+
+          {localPreflight ? (
+            <div className="mt-5 flex flex-col gap-5">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <StatusCard
+                  label="Preflight status"
+                  value={localPreflight.preflight_status || "unknown"}
+                />
+                <StatusCard
+                  label="Target repo"
+                  value={localPreflight.target_repo || "unknown"}
+                />
+                <StatusCard
+                  label="Current branch"
+                  value={localPreflight.current_branch || "unknown"}
+                />
+                <StatusCard
+                  label="Working tree"
+                  value={localPreflight.working_tree_status || "unknown"}
+                />
+                <StatusCard
+                  label="Uncommitted changes"
+                  value={booleanLabel(localPreflight.has_uncommitted_changes)}
+                />
+                <StatusCard
+                  label="Package manager"
+                  value={localPreflight.package_manager || "unknown"}
+                />
+                <StatusCard
+                  label="Project type"
+                  value={localPreflight.detected_project_type || "unknown"}
+                />
+                <StatusCard
+                  label="Next allowed step"
+                  value={localPreflight.next_allowed_step || "unknown"}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <StatusCard
+                  label="Repo exists"
+                  value={booleanLabel(localPreflight.repo_exists)}
+                />
+                <StatusCard
+                  label="Git repo"
+                  value={booleanLabel(localPreflight.repo_is_git_repo)}
+                />
+                <StatusCard
+                  label="Working tree clean/dirty"
+                  value={
+                    localPreflight.has_uncommitted_changes
+                      ? "dirty"
+                      : localPreflight.repo_is_git_repo
+                        ? "clean"
+                        : "unknown"
+                  }
+                />
+                <StatusCard
+                  label="Branch creation"
+                  value="disabled until explicit approval"
+                />
+                <StatusCard label="Deploy/publish" value="disabled" />
+                <StatusCard label="GitHub mutation" value="disabled" />
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-3">
+                <article className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-5">
+                  <h3 className="text-sm font-semibold">
+                    Available validation commands
+                  </h3>
+                  <div className="mt-4">
+                    <ValidationCommands
+                      commands={localPreflight.available_validation_commands}
+                    />
+                  </div>
+                </article>
+
+                <article className="rounded-lg border border-red-900/70 bg-red-950/20 p-5">
+                  <h3 className="text-sm font-semibold text-red-200">
+                    Blocking issues
+                  </h3>
+                  <div className="mt-4">
+                    <CompactList
+                      items={listOrFallback(localPreflight.blocking_issues)}
+                    />
+                  </div>
+                </article>
+
+                <article className="rounded-lg border border-amber-900/70 bg-amber-950/20 p-5">
+                  <h3 className="text-sm font-semibold text-amber-200">
+                    Warnings
+                  </h3>
+                  <div className="mt-4">
+                    <CompactList
+                      items={listOrFallback(localPreflight.warnings)}
+                    />
+                  </div>
+                </article>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-5">
