@@ -29,6 +29,35 @@ type Readiness = {
   deploy_publish_access?: string;
 };
 
+type RunHistoryEvent = {
+  event_id?: string;
+  event_type?: string;
+  created_at?: string;
+  source?: string;
+  actor?: string;
+  related_opportunity_id?: string | null;
+  related_plan_id?: string | null;
+  related_draft_id?: string | null;
+  related_review_id?: string | null;
+  related_patch_proposal_id?: string | null;
+  safety_state?: string;
+  blocked_actions?: string[];
+  notes?: string;
+};
+
+type RunHistory = {
+  ok?: boolean;
+  history_status?: string;
+  current_phase?: string;
+  purpose?: string;
+  tracked_event_types?: string[];
+  sample_events?: RunHistoryEvent[];
+  audit_fields?: string[];
+  blocked_actions?: string[];
+  read_only_guarantees?: string[];
+  next_recommended_step?: string;
+};
+
 const navigationCards = [
   {
     href: "/opportunities",
@@ -266,12 +295,68 @@ function ServiceGuards({ guards }: { guards?: Record<string, ServiceGuard> }) {
   );
 }
 
+function SampleEvents({ events }: { events?: RunHistoryEvent[] }) {
+  if (!Array.isArray(events) || !events.length) {
+    return <p className="text-sm text-neutral-500">No sample events returned.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {events.map((event, index) => (
+        <article
+          key={event.event_id || `sample-event-${index}`}
+          className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-4"
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-neutral-100">
+                {event.event_type || "unknown event"}
+              </p>
+              <p className="mt-1 text-xs text-neutral-500">
+                {event.event_id || "unknown id"}
+              </p>
+            </div>
+            <span className="rounded-full border border-amber-800 bg-amber-950/40 px-3 py-1 text-xs font-medium text-amber-100">
+              static sample
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2 text-sm text-neutral-300 md:grid-cols-2">
+            <p>Created: {event.created_at || "unknown"}</p>
+            <p>Source: {event.source || "unknown"}</p>
+            <p>Actor: {event.actor || "unknown"}</p>
+            <p>Safety: {event.safety_state || "unknown"}</p>
+            <p>Opportunity: {event.related_opportunity_id || "none"}</p>
+            <p>Plan: {event.related_plan_id || "none"}</p>
+            <p>Draft: {event.related_draft_id || "none"}</p>
+            <p>Review: {event.related_review_id || "none"}</p>
+            <p>Patch proposal: {event.related_patch_proposal_id || "none"}</p>
+          </div>
+          {event.notes ? (
+            <p className="mt-3 text-sm text-neutral-400">{event.notes}</p>
+          ) : null}
+          <div className="mt-3">
+            <p className="text-xs uppercase tracking-wide text-red-300">
+              Blocked actions
+            </p>
+            <div className="mt-2">
+              <CompactList items={listOrFallback(event.blocked_actions)} />
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export default function AgentCockpitPage() {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastRefreshed, setLastRefreshed] = useState("");
   const [lastRefreshFailed, setLastRefreshFailed] = useState("");
+  const [runHistory, setRunHistory] = useState<RunHistory | null>(null);
+  const [runHistoryLoading, setRunHistoryLoading] = useState(true);
+  const [runHistoryError, setRunHistoryError] = useState("");
 
   const loadReadiness = useCallback(async () => {
     setLoading(true);
@@ -300,9 +385,37 @@ export default function AgentCockpitPage() {
     }
   }, []);
 
+  const loadRunHistory = useCallback(async () => {
+    setRunHistoryLoading(true);
+    setRunHistoryError("");
+
+    try {
+      const response = await fetch(backendUrl("/api/agent-cockpit/run-history"), {
+        cache: "no-store",
+      });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status}: ${text || response.statusText}`,
+        );
+      }
+
+      setRunHistory(data);
+    } catch (err) {
+      setRunHistoryError(
+        err instanceof Error ? err.message : "Failed to fetch run history.",
+      );
+    } finally {
+      setRunHistoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadReadiness();
-  }, [loadReadiness]);
+    loadRunHistory();
+  }, [loadReadiness, loadRunHistory]);
 
   const liveStatusCards = readiness
     ? [
@@ -534,6 +647,120 @@ export default function AgentCockpitPage() {
                 <h3 className="text-sm font-semibold">Service guards</h3>
                 <div className="mt-3">
                   <ServiceGuards guards={readiness.service_guards} />
+                </div>
+              </article>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-wide text-violet-300">
+                Operator run history
+              </p>
+              <h2 className="mt-1 text-lg font-semibold">
+                Read-only run history scaffold
+              </h2>
+              <p className="mt-2 text-sm text-neutral-400">
+                This section previews audit trail structure only. It does not
+                persist events or execute workflow actions.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadRunHistory}
+              disabled={runHistoryLoading}
+              className="rounded-md border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-100 transition hover:border-neutral-500 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {runHistoryLoading ? "Refreshing..." : "Refresh run history"}
+            </button>
+          </div>
+
+          {runHistoryLoading ? (
+            <p className="mt-5 text-sm text-neutral-400">
+              Loading run history...
+            </p>
+          ) : null}
+
+          {runHistoryError ? (
+            <div className="mt-5 rounded-lg border border-red-900/70 bg-red-950/20 p-4 text-sm text-red-100">
+              {runHistoryError}
+            </div>
+          ) : null}
+
+          {runHistory ? (
+            <div className="mt-5 flex flex-col gap-5">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <StatusCard
+                  label="History status"
+                  value={runHistory.history_status || "unknown"}
+                />
+                <StatusCard
+                  label="Current phase"
+                  value={runHistory.current_phase || "unknown"}
+                />
+                <StatusCard
+                  label="Next recommended step"
+                  value={runHistory.next_recommended_step || "unknown"}
+                />
+              </div>
+
+              <article className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-4">
+                <h3 className="text-sm font-semibold">Purpose</h3>
+                <p className="mt-3 text-sm text-neutral-300">
+                  {runHistory.purpose || "No purpose returned."}
+                </p>
+              </article>
+
+              <div className="grid gap-5 lg:grid-cols-2">
+                <article>
+                  <h3 className="text-sm font-semibold">
+                    Tracked event types
+                  </h3>
+                  <div className="mt-3">
+                    <CompactList
+                      items={listOrFallback(runHistory.tracked_event_types)}
+                    />
+                  </div>
+                </article>
+                <article>
+                  <h3 className="text-sm font-semibold">Audit fields</h3>
+                  <div className="mt-3">
+                    <CompactList items={listOrFallback(runHistory.audit_fields)} />
+                  </div>
+                </article>
+                <article>
+                  <h3 className="text-sm font-semibold">Blocked actions</h3>
+                  <div className="mt-3">
+                    <CompactList
+                      items={listOrFallback(runHistory.blocked_actions)}
+                    />
+                  </div>
+                </article>
+                <article>
+                  <h3 className="text-sm font-semibold">
+                    Read-only guarantees
+                  </h3>
+                  <div className="mt-3">
+                    <CompactList
+                      items={listOrFallback(runHistory.read_only_guarantees)}
+                    />
+                  </div>
+                </article>
+              </div>
+
+              <article>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                  <h3 className="text-sm font-semibold">
+                    Static sample events — not real history
+                  </h3>
+                  <p className="text-xs text-neutral-500">
+                    Samples show shape only.
+                  </p>
+                </div>
+                <div className="mt-3">
+                  <SampleEvents events={runHistory.sample_events} />
                 </div>
               </article>
             </div>
