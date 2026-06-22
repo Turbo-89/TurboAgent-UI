@@ -232,6 +232,43 @@ const notAllowedIn2I = [
   "change GA4",
 ];
 
+const releaseSafetyStatuses = [
+  ["Release checklist endpoint", "available"],
+  ["Release execution", "disabled"],
+  ["Deploy/publish", "disabled"],
+  ["Merge", "disabled"],
+  ["Push-to-live", "disabled"],
+  ["GitHub mutation", "disabled"],
+  ["Ads/GA4 changes", "disabled"],
+];
+
+const requiredBeforeRelease = [
+  "changed files reviewed",
+  "SEO reviewed",
+  "content reviewed",
+  "schema reviewed",
+  "build validation reviewed",
+  "rollback plan reviewed",
+  "manual approval confirmed",
+  "no Ads/GA4 changes included",
+  "no GitHub mutation authorized yet",
+  "no deploy authorized yet",
+];
+
+const blockedIn2J = [
+  "release execution",
+  "deploy",
+  "publish",
+  "merge",
+  "push-to-live",
+  "GitHub mutation",
+  "branch creation",
+  "staging",
+  "commit",
+  "file writes to turboservices",
+  "Ads/GA4 changes",
+];
+
 const runHistoryLimitations = [
   "no persistence yet",
   "no database yet",
@@ -1031,6 +1068,61 @@ export default function AgentCockpitPage() {
               <p className="mt-4 text-sm text-cyan-100">
                 2I prepares review material only. PR creation requires explicit
                 final approval.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-5">
+          <div>
+            <p className="text-sm uppercase tracking-wide text-purple-300">
+              Release safety summary
+            </p>
+            <h2 className="mt-1 text-lg font-semibold">
+              Future turboservices release safety
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm text-neutral-400">
+              Deze fase definieert de veiligheidschecklist vóór een toekomstige
+              release ooit mag doorgaan.
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {releaseSafetyStatuses.map(([label, value]) => (
+              <StatusCard key={label} label={label} value={value} />
+            ))}
+          </div>
+
+          <div className="mt-5 grid gap-6 lg:grid-cols-3">
+            <article className="rounded-lg border border-emerald-900/70 bg-emerald-950/20 p-5">
+              <h3 className="text-sm font-semibold text-emerald-200">
+                Required before release
+              </h3>
+              <ul className="mt-4 space-y-2 text-sm text-emerald-100">
+                {requiredBeforeRelease.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+
+            <article className="rounded-lg border border-red-900/70 bg-red-950/20 p-5">
+              <h3 className="text-sm font-semibold text-red-200">
+                Blocked in 2J
+              </h3>
+              <ul className="mt-4 space-y-2 text-sm text-red-100">
+                {blockedIn2J.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+
+            <article className="rounded-lg border border-purple-900/70 bg-purple-950/20 p-5">
+              <h3 className="text-sm font-semibold text-purple-200">
+                Safety statement
+              </h3>
+              <p className="mt-4 text-sm text-purple-100">
+                2J defines release safety only. Release requires explicit final
+                release approval.
               </p>
             </article>
           </div>
