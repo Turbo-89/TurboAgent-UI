@@ -192,6 +192,13 @@ const doNotExpandHere = [
   "no Ads/GA4 write logic",
 ];
 
+const runHistoryLimitations = [
+  "no persistence yet",
+  "no database yet",
+  "no real operator history yet",
+  "sample events only",
+];
+
 function listOrFallback(value: string[] | undefined): string[] {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
@@ -357,6 +364,9 @@ export default function AgentCockpitPage() {
   const [runHistory, setRunHistory] = useState<RunHistory | null>(null);
   const [runHistoryLoading, setRunHistoryLoading] = useState(true);
   const [runHistoryError, setRunHistoryError] = useState("");
+  const [lastRunHistoryRefreshed, setLastRunHistoryRefreshed] = useState("");
+  const [lastRunHistoryRefreshFailed, setLastRunHistoryRefreshFailed] =
+    useState("");
 
   const loadReadiness = useCallback(async () => {
     setLoading(true);
@@ -403,10 +413,12 @@ export default function AgentCockpitPage() {
       }
 
       setRunHistory(data);
+      setLastRunHistoryRefreshed(formatTimestamp(new Date()));
     } catch (err) {
       setRunHistoryError(
         err instanceof Error ? err.message : "Failed to fetch run history.",
       );
+      setLastRunHistoryRefreshFailed(formatTimestamp(new Date()));
     } finally {
       setRunHistoryLoading(false);
     }
@@ -677,6 +689,70 @@ export default function AgentCockpitPage() {
             </button>
           </div>
 
+          <div className="mt-5 flex flex-wrap gap-2">
+            {runHistoryLoading ? (
+              <StatusIndicator tone="loading" label="loading" />
+            ) : runHistoryError ? (
+              <StatusIndicator tone="error" label="error/offline" />
+            ) : runHistory ? (
+              <StatusIndicator tone="ready" label="scaffold loaded" />
+            ) : null}
+            <StatusIndicator tone="fallback" label="static sample only" />
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            <article className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-4">
+              <h3 className="text-sm font-semibold">
+                What this will track later
+              </h3>
+              <p className="mt-3 text-xs uppercase tracking-wide text-violet-300">
+                Event types
+              </p>
+              <div className="mt-2">
+                <CompactList
+                  items={listOrFallback(runHistory?.tracked_event_types)}
+                />
+              </div>
+              <p className="mt-4 text-xs uppercase tracking-wide text-violet-300">
+                Audit fields
+              </p>
+              <div className="mt-2">
+                <CompactList items={listOrFallback(runHistory?.audit_fields)} />
+              </div>
+            </article>
+
+            <article className="rounded-lg border border-amber-900/70 bg-amber-950/20 p-4">
+              <h3 className="text-sm font-semibold text-amber-200">
+                Current limitation
+              </h3>
+              <ul className="mt-3 space-y-2 text-sm text-amber-100">
+                {runHistoryLimitations.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              {lastRunHistoryRefreshed ? (
+                <p className="mt-4 text-xs text-emerald-300">
+                  Last run history refresh: {lastRunHistoryRefreshed}
+                </p>
+              ) : null}
+              {lastRunHistoryRefreshFailed ? (
+                <p className="mt-1 text-xs text-red-300">
+                  Last run history refresh failed: {lastRunHistoryRefreshFailed}
+                </p>
+              ) : null}
+            </article>
+
+            <article className="rounded-lg border border-sky-900/70 bg-sky-950/20 p-4">
+              <h3 className="text-sm font-semibold text-sky-200">
+                Next useful step
+              </h3>
+              <p className="mt-3 text-sm text-sky-100">
+                Add local read-only event capture design before adding
+                persistence.
+              </p>
+            </article>
+          </div>
+
           {runHistoryLoading ? (
             <p className="mt-5 text-sm text-neutral-400">
               Loading run history...
@@ -753,7 +829,7 @@ export default function AgentCockpitPage() {
               <article>
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                   <h3 className="text-sm font-semibold">
-                    Static sample events — not real history
+                    Static sample events — no real audit log is stored yet
                   </h3>
                   <p className="text-xs text-neutral-500">
                     Samples show shape only.
