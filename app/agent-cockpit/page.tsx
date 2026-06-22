@@ -58,6 +58,17 @@ type RunHistory = {
   next_recommended_step?: string;
 };
 
+type AuditEventResult = {
+  ok?: boolean;
+  audit_write_status?: string;
+  event_id?: string;
+  event_type?: string;
+  created_at?: string;
+  storage_path?: string;
+  safety_state?: string;
+  message?: string;
+};
+
 const navigationCards = [
   {
     href: "/opportunities",
@@ -367,6 +378,10 @@ export default function AgentCockpitPage() {
   const [lastRunHistoryRefreshed, setLastRunHistoryRefreshed] = useState("");
   const [lastRunHistoryRefreshFailed, setLastRunHistoryRefreshFailed] =
     useState("");
+  const [auditEventLoading, setAuditEventLoading] = useState(false);
+  const [auditEventError, setAuditEventError] = useState("");
+  const [auditEventResult, setAuditEventResult] =
+    useState<AuditEventResult | null>(null);
 
   const loadReadiness = useCallback(async () => {
     setLoading(true);
@@ -421,6 +436,46 @@ export default function AgentCockpitPage() {
       setLastRunHistoryRefreshFailed(formatTimestamp(new Date()));
     } finally {
       setRunHistoryLoading(false);
+    }
+  }, []);
+
+  const recordCockpitAuditEvent = useCallback(async () => {
+    setAuditEventLoading(true);
+    setAuditEventError("");
+    setAuditEventResult(null);
+
+    try {
+      const response = await fetch(backendUrl("/api/agent-cockpit/audit-events"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          event_type: "run_history_viewed",
+          source: "agent_cockpit",
+          actor: "operator",
+          workflow_phase: "2G \u2014 Local audit writer",
+          user_visible_summary:
+            "Operator viewed the cockpit run history and readiness status.",
+          notes: "Manual cockpit audit event. Local JSONL audit only.",
+        }),
+      });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status}: ${text || response.statusText}`,
+        );
+      }
+
+      setAuditEventResult(data);
+    } catch (err) {
+      setAuditEventError(
+        err instanceof Error ? err.message : "Failed to record audit event.",
+      );
+    } finally {
+      setAuditEventLoading(false);
     }
   }, []);
 
@@ -839,6 +894,60 @@ export default function AgentCockpitPage() {
                   <SampleEvents events={runHistory.sample_events} />
                 </div>
               </article>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="rounded-lg border border-amber-900/70 bg-amber-950/20 p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-wide text-amber-300">
+                Local audit event
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-amber-100">
+                Record cockpit view audit event
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm text-amber-100/80">
+                This only writes a local audit event. It does not execute,
+                deploy, publish, push, merge or change Ads/GA4.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={recordCockpitAuditEvent}
+              disabled={auditEventLoading}
+              className="rounded-md border border-amber-700 px-4 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-500 hover:bg-amber-900/40 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {auditEventLoading
+                ? "Recording..."
+                : "Record cockpit view audit event"}
+            </button>
+          </div>
+
+          {auditEventError ? (
+            <div className="mt-5 rounded-lg border border-red-900/70 bg-red-950/40 p-4 text-sm text-red-100">
+              {auditEventError}
+            </div>
+          ) : null}
+
+          {auditEventResult ? (
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <StatusCard
+                label="Event id"
+                value={auditEventResult.event_id || "unknown"}
+              />
+              <StatusCard
+                label="Created at"
+                value={auditEventResult.created_at || "unknown"}
+              />
+              <StatusCard
+                label="Storage path"
+                value={auditEventResult.storage_path || "unknown"}
+              />
+              <StatusCard
+                label="Safety state"
+                value={auditEventResult.safety_state || "unknown"}
+              />
             </div>
           ) : null}
         </section>
