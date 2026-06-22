@@ -269,6 +269,47 @@ const blockedIn2J = [
   "Ads/GA4 changes",
 ];
 
+const phase2CompletedBlocks = [
+  "2A \u2014 Local context discovery",
+  "2B \u2014 AI/SEO intelligence basis",
+  "2C \u2014 Opportunity to read-only patch preparation workflow",
+  "2D \u2014 Agent cockpit / operator overview",
+  "2E \u2014 Operator run history scaffold",
+  "2F \u2014 Local audit storage strategy",
+  "2G \u2014 Local JSONL audit writer",
+  "2H \u2014 Controlled turboservices patch preparation",
+  "2I \u2014 Review / PR-flow preparation without live mutation",
+  "2J \u2014 Release protocol and safety checklist",
+];
+
+const phase2Capabilities = [
+  "scan local context",
+  "identify landing page opportunities",
+  "score opportunities",
+  "generate implementation plans",
+  "generate drafts/packages/reviews",
+  "generate patch proposals",
+  "generate turboservices target maps",
+  "generate patch plans",
+  "generate review checklist material",
+  "generate release safety checklist material",
+  "show cockpit status",
+  "write explicit local audit events to JSONL",
+];
+
+const phase2StillBlocked = [
+  "automatic deploy",
+  "publish",
+  "merge",
+  "push-to-live",
+  "automatic GitHub PR creation",
+  "automatic branch creation",
+  "automatic file writes to turboservices",
+  "Google Ads changes",
+  "GA4 changes",
+  "Vercel production actions",
+];
+
 const runHistoryLimitations = [
   "no persistence yet",
   "no database yet",
@@ -1123,6 +1164,80 @@ export default function AgentCockpitPage() {
               <p className="mt-4 text-sm text-purple-100">
                 2J defines release safety only. Release requires explicit final
                 release approval.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-neutral-800 bg-neutral-900/70 p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-wide text-emerald-300">
+                Phase 2 completion summary
+              </p>
+              <h2 className="mt-1 text-lg font-semibold">
+                Phase 2 {"\u2014"} ready to close
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm text-neutral-400">
+                Phase 2 leaves the agent in a controlled planning, review,
+                audit and release-safety state. It can prepare work, but it
+                cannot execute live changes.
+              </p>
+            </div>
+            <StatusIndicator tone="ready" label="Phase 2 ready to close" />
+          </div>
+
+          <div className="mt-5 grid gap-6 lg:grid-cols-3">
+            <article className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-5">
+              <h3 className="text-sm font-semibold">Completed blocks</h3>
+              <ul className="mt-4 space-y-2 text-sm text-neutral-300">
+                {phase2CompletedBlocks.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+
+            <article className="rounded-lg border border-emerald-900/70 bg-emerald-950/20 p-5">
+              <h3 className="text-sm font-semibold text-emerald-200">
+                Current capabilities
+              </h3>
+              <ul className="mt-4 space-y-2 text-sm text-emerald-100">
+                {phase2Capabilities.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+
+            <article className="rounded-lg border border-red-900/70 bg-red-950/20 p-5">
+              <h3 className="text-sm font-semibold text-red-200">
+                Still blocked
+              </h3>
+              <ul className="mt-4 space-y-2 text-sm text-red-100">
+                {phase2StillBlocked.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+
+          <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_1.4fr]">
+            <article className="rounded-lg border border-sky-900/70 bg-sky-950/20 p-5">
+              <h3 className="text-sm font-semibold text-sky-200">
+                Recommended next phase
+              </h3>
+              <p className="mt-4 text-sm font-medium text-sky-100">
+                Phase 3 {"\u2014"} Controlled implementation execution
+              </p>
+            </article>
+
+            <article className="rounded-lg border border-amber-900/70 bg-amber-950/20 p-5">
+              <h3 className="text-sm font-semibold text-amber-200">
+                Safety statement
+              </h3>
+              <p className="mt-4 text-sm text-amber-100">
+                Phase 3 may only start with explicit approval for local
+                implementation execution. No live release is authorized by Phase
+                2 completion.
               </p>
             </article>
           </div>
